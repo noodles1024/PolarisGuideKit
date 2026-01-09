@@ -4,18 +4,22 @@
 
 一个轻量的基于 UIKit 的新手引导（coach marks）组件：通过遮罩挖孔高亮 UI 元素，并支持搭配说明视图（Buddy View）与按步骤编排的引导流程。
 
+https://raw.githubusercontent.com/noodles1024/PolarisGuideKit/main/Screenshots/demo_cn.mp4
+
 ## 功能特性
 
 - 单个 focusView 高亮（遮罩挖孔 + 可选过渡动画）：`GuideOverlayView`
+- 高亮区域自动跟踪 focusView 位置变化，适配屏幕旋转、动画等场景
 - 以步骤编排的新手引导流程：`GuideController` + `GuideStep`
 - 通过继承实现任意说明/箭头/按钮视图：`GuideBuddyView`
-- 可自定义的自动“完成条件”：`GuideAutoCompleter`、`ControlEventCompleter`
-- 可插拔的步骤扩展（插件 + 附件，例如音频播放）
+- 可自定义的自动"完成条件"：`GuideAutoCompleter`、`ControlEventCompleter`
+- 可插拔的步骤扩展（插件 + 附件，例如音频播放、埋点事件上报、引导显示标志保存等）
+- 侵入性小，能很好地保持原有业务逻辑
 
 ## 环境要求
 
 - iOS 12+
-- Swift 5.7+
+- Swift 5.0+
 - UIKit
 
 ## 安装（Swift Package Manager）
@@ -216,3 +220,21 @@ flowchart TB
 ## License
 
 本仓库采用 MIT License，详见 `LICENSE`。
+
+## 支持开发者
+
+如果你觉得这个项目对你有帮助，可以考虑支持我的开源工作 ☕
+
+### 微信赞赏支持
+
+![微信赞赏码](https://raw.githubusercontent.com/noodles1024/PolarisGuideKit/main/Screenshots/wechat_reward_qr.jpg)
+
+<!-- Buy Me a Coffee (国际用户) -->
+<!-- [!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/noodles1024) -->
+
+或者通过以下方式支持：
+
+- ⭐ 在 GitHub 上给项目点星
+- 🐛 [提交 Issue](https://github.com/noodles1024/PolarisGuideKit/issues) 报告问题或建议功能
+- 🔀 [提交 Pull Request](https://github.com/noodles1024/PolarisGuideKit/pulls) 贡献代码
+- 📢 在社交媒体上分享这个项目

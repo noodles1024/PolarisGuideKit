@@ -2,20 +2,24 @@
 
 [中文说明](README.zh-Hans.md)
 
-A lightweight UIKit based guide/onboarding (“coach marks”) component for highlighting UI elements with a cut-out mask, optional companion views, and step-based orchestration.
+A lightweight UIKit based guide/onboarding ("coach marks") component for highlighting UI elements with a cut-out mask, optional companion views, and step-based orchestration.
+
+https://raw.githubusercontent.com/noodles1024/PolarisGuideKit/main/Screenshots/demo_en.mp4
 
 ## Features
 
 - Highlight a single focus view with an animated mask transition (`GuideOverlayView`)
+- Auto-tracking of focus view position changes, adapting to screen rotation, animations, and more
 - Step-based guide orchestration (`GuideController` + `GuideStep`)
 - Companion overlay UI via subclassing (`GuideBuddyView`)
 - Customized auto-completion triggers (`GuideAutoCompleter`, `ControlEventCompleter`)
-- Pluggable step extensions via plugins and attachments (e.g., audio playback)
+- Pluggable step extensions via plugins and attachments (e.g., audio playback, analytics tracking, guide-shown flag persistence)
+- Minimal intrusion, preserving your existing business logic
 
 ## Requirements
 
 - iOS 12+
-- Swift 5.7+
+- Swift 5.0+
 - UIKit
 
 ## Installation (Swift Package Manager)
@@ -216,3 +220,21 @@ Prefer passing an explicit `hostView` to `GuideController(hostView:steps:)` to a
 ## License
 
 Licensed under the MIT License. See `LICENSE`.
+
+## Support the Developer
+
+If you find this project helpful, consider supporting my open source work ☕
+
+### WeChat Reward (China Users)
+
+![WeChat Reward QR Code](https://raw.githubusercontent.com/noodles1024/PolarisGuideKit/main/Screenshots/wechat_reward_qr.jpg)
+
+<!-- Buy Me a Coffee (International Users) -->
+<!-- [!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/noodles1024) -->
+
+Or support in other ways:
+
+- ⭐ Star the project on GitHub
+- 🐛 [Create an Issue](https://github.com/noodles1024/PolarisGuideKit/issues) to report bugs or suggest features
+- 🔀 [Submit a Pull Request](https://github.com/noodles1024/PolarisGuideKit/pulls) to contribute code
+- 📢 Share this project on social media
