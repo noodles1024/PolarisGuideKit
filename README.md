@@ -1,40 +1,40 @@
 # PolarisGuideKit
 
-[中文说明](README.zh-Hans.md)
+[English](README.en.md)
 
-A lightweight UIKit based guide/onboarding ("coach marks") component for highlighting UI elements with a cut-out mask, optional companion views, and step-based orchestration.
+一个轻量的基于 UIKit 的新手引导（coach marks）组件：通过遮罩挖孔高亮 UI 元素，并支持搭配说明视图（Buddy View）与按步骤编排的引导流程。
 
-https://raw.githubusercontent.com/noodles1024/PolarisGuideKit/main/Screenshots/demo_en.mp4
+🎬 [查看演示视频](https://raw.githubusercontent.com/noodles1024/PolarisGuideKit/main/Screenshots/demo_cn.mp4)
 
-## Features
+## 功能特性
 
-- Highlight a single focus view with an animated mask transition (`GuideOverlayView`)
-- Auto-tracking of focus view position changes, adapting to screen rotation, animations, and more
-- Step-based guide orchestration (`GuideController` + `GuideStep`)
-- Companion overlay UI via subclassing (`GuideBuddyView`)
-- Customized auto-completion triggers (`GuideAutoCompleter`, `ControlEventCompleter`)
-- Pluggable step extensions via plugins and attachments (e.g., audio playback, analytics tracking, guide-shown flag persistence)
-- Minimal intrusion, preserving your existing business logic
+- 单个 focusView 高亮（遮罩挖孔 + 可选过渡动画）：`GuideOverlayView`
+- 高亮区域自动跟踪 focusView 位置变化，适配屏幕旋转、动画等场景
+- 以步骤编排的新手引导流程：`GuideController` + `GuideStep`
+- 通过继承实现任意说明/箭头/按钮视图：`GuideBuddyView`
+- 可自定义的自动"完成条件"：`GuideAutoCompleter`、`ControlEventCompleter`
+- 可插拔的步骤扩展（插件 + 附件，例如音频播放、埋点事件上报、引导显示标志保存等）
+- 侵入性小，能很好地保持原有业务逻辑
 
-## Requirements
+## 环境要求
 
 - iOS 12+
 - Swift 5.0+
 - UIKit
 
-## Installation (Swift Package Manager)
+## 安装（Swift Package Manager）
 
-1. In Xcode: **File → Add Packages…**
-2. Paste repo URL: `https://github.com/noodles1024/PolarisGuideKit`
-3. Select **PolarisGuideKit**
+1. Xcode：**File → Add Packages…**
+2. 填入仓库地址：`https://github.com/noodles1024/PolarisGuideKit`
+3. 选择 **PolarisGuideKit**
 
-If you use `Package.swift`, add a dependency on your repo and then:
+然后在代码里：
 
 ```swift
 import PolarisGuideKit
 ```
 
-## Quick Start
+## 快速开始
 
 ```swift
 import UIKit
@@ -54,7 +54,7 @@ final class MyViewController: UIViewController {
 
         let controller = GuideController(hostView: view, steps: [step1])
         controller.onDismiss = { _, context in
-            print("Guide dismissed. reason=\(context.reason)")
+            print("引导结束。原因=\(context.reason)")
         }
 
         _ = controller.show()
@@ -63,9 +63,9 @@ final class MyViewController: UIViewController {
 }
 ```
 
-## Custom Buddy View
+## 自定义 Buddy View（说明/箭头/按钮等）
 
-Subclass `GuideBuddyView`, build your UI, and call `requestNext()` / `requestSkip()` when appropriate.
+继承 `GuideBuddyView`，搭建 UI，在合适的时机调用 `requestNext()` / `requestSkip()`。
 
 ```swift
 import UIKit
@@ -76,17 +76,17 @@ final class MyBuddyView: GuideBuddyView {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        nextButton.setTitle("Next", for: .normal)
+        nextButton.setTitle("下一步", for: .normal)
         nextButton.addTarget(self, action: #selector(onNext), for: .touchUpInside)
         addSubview(nextButton)
-        // layout your subviews...
+        // 自行布局...
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     override func updateLayout(referenceLayoutGuide layoutGuide: UILayoutGuide, focusView: UIView) {
         super.updateLayout(referenceLayoutGuide: layoutGuide, focusView: focusView)
-        // Position your subviews relative to layoutGuide.
+        // 根据 layoutGuide 相对定位你的子视图（避免遮挡高亮区域）
     }
 
     @objc private func onNext() {
@@ -95,9 +95,9 @@ final class MyBuddyView: GuideBuddyView {
 }
 ```
 
-## Custom Focus Style
+## 自定义 FocusStyle（高亮形状）
 
-Create a custom `FocusStyle` to control highlight shape.
+实现 `FocusStyle`，控制挖孔形状（例如圆角等）。
 
 ```swift
 import UIKit
@@ -114,14 +114,14 @@ struct MyRoundedStyle: FocusStyle {
 }
 ```
 
-## Dynamic FocusView (UITableView/UICollectionView)
+## 动态 FocusView（UITableView/UICollectionView）
 
-When highlighting cells in `UITableView` or `UICollectionView`, cells may be reused after `reloadData`, causing the highlight to shift or disappear. Use `focusViewProvider` to dynamically obtain the correct cell:
+当高亮 `UITableView` 或 `UICollectionView` 中的 cell 时，`reloadData` 后 cell 可能会被复用，导致高亮区域错位或消失。使用 `focusViewProvider` 动态获取正确的 cell：
 
 ```swift
 let step = GuideStep()
 
-// Use focusViewProvider for dynamic cell lookup
+// 使用 focusViewProvider 动态查找 cell
 step.focusViewProvider = { [weak self] in
     guard let self else { return nil }
     var focusCell = self.tableView.cellForRow(at: targetIndexPath)
@@ -135,13 +135,13 @@ step.focusViewProvider = { [weak self] in
 step.buddyView = MyBuddyView()
 ```
 
-The closure is called whenever the highlight needs to be updated, ensuring it always targets the correct cell even after `reloadData`.
+每次需要更新高亮时都会调用此闭包，确保始终高亮正确的 cell，即使 `reloadData` 后也不受影响。
 
-> **Note**: For static views that don't change, you can still use `step.focusView = myView` directly.
+> **提示**：对于不会改变的静态视图，仍可直接使用 `step.focusView = myView`。
 
-## Plugins & Attachments
+## 插件与附件
 
-Use plugins for optional behaviors (e.g., audio). Attachments carry per-step data.
+可选功能通过插件实现，附件用于承载每一步的插件数据。
 
 ```swift
 let step = GuideStep()
@@ -154,7 +154,7 @@ if let url = Bundle.main.url(forResource: "guide_step_1", withExtension: "mp3") 
 let controller = GuideController(hostView: view, steps: [step], plugins: [AudioGuidePlugin()])
 ```
 
-Buddy views can adopt plugin-specific protocols when needed:
+需要接收插件事件的 Buddy View 可以按需实现协议：
 
 ```swift
 final class MyBuddyView: GuideBuddyView, GuideAudioEventReceiving {
@@ -163,78 +163,78 @@ final class MyBuddyView: GuideBuddyView, GuideAudioEventReceiving {
 }
 ```
 
-`stepDidShow` fires when the step is configured; `guideDidShow` fires after the overlay fade-in (if animated). Plugins that depend on fully visible UI should wait for `guideDidShow`.
+`stepDidShow` 在步骤配置完成后触发，`guideDidShow` 在（如果开启动画）遮罩淡入完成后触发；依赖“界面完全可见”的插件应等待 `guideDidShow`。
 
-## Architecture
+## 架构
 
 ```mermaid
 flowchart TB
-    subgraph Core["Core Components"]
-        GuideController["GuideController<br/>(Orchestrator)"]
-        GuideStep["GuideStep<br/>(Step Configuration)"]
+    subgraph Core["核心组件"]
+        GuideController["GuideController<br/>(流程编排器)"]
+        GuideStep["GuideStep<br/>(步骤配置)"]
     end
 
-    subgraph ViewHierarchy["View Hierarchy"]
-        GuideContainerView["GuideContainerView<br/>(Transparent Container)"]
-        GuideOverlayView["GuideOverlayView<br/>(Mask + Touch Forwarding)"]
-        MaskOverlayView["MaskOverlayView<br/>(Base Mask Class)"]
-        GuideBuddyView["GuideBuddyView<br/>(Companion UI)"]
-        GuideShadowView["GuideShadowView<br/>(Focus View Tracker)"]
+    subgraph ViewHierarchy["视图层级"]
+        GuideContainerView["GuideContainerView<br/>(透明容器)"]
+        GuideOverlayView["GuideOverlayView<br/>(遮罩 + 触摸转发)"]
+        MaskOverlayView["MaskOverlayView<br/>(遮罩基类)"]
+        GuideBuddyView["GuideBuddyView<br/>(说明视图)"]
+        GuideShadowView["GuideShadowView<br/>(焦点追踪器)"]
     end
 
-    subgraph Extensions["Extensions"]
-        FocusStyle["FocusStyle<br/>(Highlight Shape)"]
-        GuideAutoCompleter["GuideAutoCompleter<br/>(Completion Trigger)"]
-        GuidePlugin["GuidePlugin<br/>(Lifecycle Hooks)"]
-        GuideStepAttachment["GuideStepAttachment<br/>(Plugin Data)"]
+    subgraph Extensions["扩展机制"]
+        FocusStyle["FocusStyle<br/>(高亮形状)"]
+        GuideAutoCompleter["GuideAutoCompleter<br/>(完成触发器)"]
+        GuidePlugin["GuidePlugin<br/>(生命周期钩子)"]
+        GuideStepAttachment["GuideStepAttachment<br/>(插件数据)"]
     end
 
-    GuideController -->|"manages"| GuideStep
-    GuideController -->|"creates & hosts"| GuideContainerView
-    GuideController -->|"dispatches events"| GuidePlugin
+    GuideController -->|"管理"| GuideStep
+    GuideController -->|"创建并承载"| GuideContainerView
+    GuideController -->|"派发事件"| GuidePlugin
     
-    GuideContainerView -->|"contains"| GuideOverlayView
-    GuideContainerView -->|"contains"| GuideBuddyView
+    GuideContainerView -->|"包含"| GuideOverlayView
+    GuideContainerView -->|"包含"| GuideBuddyView
     
-    GuideOverlayView -.->|"inherits"| MaskOverlayView
-    GuideOverlayView -->|"creates"| GuideShadowView
-    GuideOverlayView -->|"uses"| FocusStyle
+    GuideOverlayView -.->|"继承"| MaskOverlayView
+    GuideOverlayView -->|"创建"| GuideShadowView
+    GuideOverlayView -->|"使用"| FocusStyle
     
-    GuideStep -->|"configures"| GuideBuddyView
-    GuideStep -->|"uses"| FocusStyle
-    GuideStep -->|"triggers via"| GuideAutoCompleter
-    GuideStep -->|"carries"| GuideStepAttachment
+    GuideStep -->|"配置"| GuideBuddyView
+    GuideStep -->|"使用"| FocusStyle
+    GuideStep -->|"通过...触发"| GuideAutoCompleter
+    GuideStep -->|"携带"| GuideStepAttachment
 ```
 
-## FAQ
+## 常见问题
 
-### Touch forwarding doesn't work
+### 点击事件没有透传到 focusView
 
-- Ensure `step.forwardsTouchEventsToFocusView = true`
-- Ensure the focus view is in the same window as the overlay
+- 确保 `step.forwardsTouchEventsToFocusView = true`
+- 确保 focusView 与 overlay 在同一个 window
 
-### Multi-window / multi-scene apps
+### 多 window / 多 scene 场景
 
-Prefer passing an explicit `hostView` to `GuideController(hostView:steps:)` to avoid ambiguity.
+建议显式传入 `hostView`（`GuideController(hostView:steps:)`），避免"key window"歧义。
 
 ## License
 
-Licensed under the MIT License. See `LICENSE`.
+本仓库采用 MIT License，详见 `LICENSE`。
 
-## Support the Developer
+## 支持开发者
 
-If you find this project helpful, consider supporting my open source work ☕
+如果你觉得这个项目对你有帮助，可以考虑支持我的开源工作 ☕
 
-### WeChat Reward (China Users)
+### 微信赞赏支持
 
-![WeChat Reward QR Code](https://raw.githubusercontent.com/noodles1024/PolarisGuideKit/main/Screenshots/wechat_reward_qr.jpg)
+![微信赞赏码](https://raw.githubusercontent.com/noodles1024/PolarisGuideKit/main/Screenshots/wechat_reward_qr.jpg)
 
-<!-- Buy Me a Coffee (International Users) -->
+<!-- Buy Me a Coffee (国际用户) -->
 <!-- [!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/noodles1024) -->
 
-Or support in other ways:
+或者通过以下方式支持：
 
-- ⭐ Star the project on GitHub
-- 🐛 [Create an Issue](https://github.com/noodles1024/PolarisGuideKit/issues) to report bugs or suggest features
-- 🔀 [Submit a Pull Request](https://github.com/noodles1024/PolarisGuideKit/pulls) to contribute code
-- 📢 Share this project on social media
+- ⭐ 在 GitHub 上给项目点星
+- 🐛 [提交 Issue](https://github.com/noodles1024/PolarisGuideKit/issues) 报告问题或建议功能
+- 🔀 [提交 Pull Request](https://github.com/noodles1024/PolarisGuideKit/pulls) 贡献代码
+- 📢 在社交媒体上分享这个项目
