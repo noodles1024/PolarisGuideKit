@@ -4,7 +4,7 @@ import PackageDescription
 let package = Package(
     name: "PolarisGuideKit",
     platforms: [
-        .iOS(.v11)
+        .iOS(.v12)
     ],
     products: [
         .library(
