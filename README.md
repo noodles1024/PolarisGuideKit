@@ -4,7 +4,7 @@
 
 一个轻量的基于 UIKit 的新手引导（coach marks）组件：通过遮罩挖孔高亮 UI 元素，并支持搭配说明视图（Buddy View）与按步骤编排的引导流程。
 
-🎬 [查看演示视频](https://raw.githubusercontent.com/noodles1024/PolarisGuideKit/main/Screenshots/demo_cn.mp4)
+![演示动画](https://raw.githubusercontent.com/noodles1024/PolarisGuideKit/main/Screenshots/demo_cn_tiny.webp)
 
 ## 功能特性
 
@@ -22,11 +22,21 @@
 - Swift 5.0+
 - UIKit
 
-## 安装（Swift Package Manager）
+## 安装
+
+### Swift Package Manager
 
 1. Xcode：**File → Add Packages…**
 2. 填入仓库地址：`https://github.com/noodles1024/PolarisGuideKit`
 3. 选择 **PolarisGuideKit**
+
+### CocoaPods
+
+在 Podfile 中添加：
+
+```ruby
+pod 'PolarisGuideKit'
+```
 
 然后在代码里：
 
@@ -141,16 +151,22 @@ step.buddyView = MyBuddyView()
 
 ## 插件与附件
 
-可选功能通过插件实现，附件用于承载每一步的插件数据。
+PolarisGuideKit 支持通过插件系统扩展功能。插件可以在引导流程的不同阶段执行自定义逻辑，附件则用于存储每一步的数据。
+
+### 内置插件示例
+
+**音频播放插件**：为步骤添加背景音乐或语音解说
 
 ```swift
 let step = GuideStep()
 step.focusView = myButton
 
+// 添加音频附件
 if let url = Bundle.main.url(forResource: "guide_step_1", withExtension: "mp3") {
     step.addAttachment(GuideAudioAttachment(url: url, volume: 0.8))
 }
 
+// 启用音频插件
 let controller = GuideController(hostView: view, steps: [step], plugins: [AudioGuidePlugin()])
 ```
 
@@ -161,6 +177,29 @@ final class MyBuddyView: GuideBuddyView, GuideAudioEventReceiving {
     func guideAudioDidStart() { /* update UI */ }
     func guideAudioDidFinish() { /* update UI */ }
 }
+```
+
+### 自定义插件
+
+你可以通过实现 `GuidePlugin` 协议来创建自己的插件：
+
+```swift
+final class MyCustomPlugin: GuidePlugin {
+    func guideController(_ controller: GuideController, willShowGuideWith context: GuideContext) {
+        // 引导开始时的逻辑
+    }
+
+    func guideController(_ controller: GuideController, didCompleteStep step: GuideStep, at index: Int, with context: GuideContext) {
+        // 步骤完成时的逻辑
+    }
+
+    func guideController(_ controller: GuideController, didDismissGuideWith context: GuideContext) {
+        // 引导结束时的逻辑
+    }
+}
+
+// 使用自定义插件
+let controller = GuideController(hostView: view, steps: steps, plugins: [MyCustomPlugin()])
 ```
 
 `stepDidShow` 在步骤配置完成后触发，`guideDidShow` 在（如果开启动画）遮罩淡入完成后触发；依赖“界面完全可见”的插件应等待 `guideDidShow`。
@@ -227,7 +266,7 @@ flowchart TB
 
 ### 微信赞赏支持
 
-![微信赞赏码](https://raw.githubusercontent.com/noodles1024/PolarisGuideKit/main/Screenshots/wechat_reward_qr.jpg)
+![微信赞赏码](https://raw.githubusercontent.com/noodles1024/PolarisGuideKit/main/Screenshots/wechat_reward_qr.png)
 
 <!-- Buy Me a Coffee (国际用户) -->
 <!-- [!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/noodles1024) -->
