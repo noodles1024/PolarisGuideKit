@@ -156,12 +156,27 @@ final class TalkingBuddyView: GuideBuddyView, GuideAudioEventReceiving {
         animationView.play()
     }
 
-    func guideAudioDidFinish() {
+    func guideAudioDidStop(didPlayToEnd: Bool) {
         isAudioPlaying = false
-        statusLabel.text = DemoStrings.AudioGuide.statusFinished
-        statusLabel.textColor = .secondaryLabel
+        if didPlayToEnd {
+            statusLabel.text = DemoStrings.AudioGuide.statusFinished
+            statusLabel.textColor = .secondaryLabel
+        } else {
+            // The audio was stopped by the plugin (e.g. step dismissed / replaced).
+            statusLabel.text = DemoStrings.AudioGuide.statusWaiting
+            statusLabel.textColor = .secondaryLabel
+        }
         animationView.stop()
         animationView.currentProgress = 0
+    }
+
+    func guideAudioDidFail(_ error: Error) {
+        isAudioPlaying = false
+        statusLabel.text = DemoStrings.AudioGuide.statusFailed
+        statusLabel.textColor = .systemRed
+        animationView.stop()
+        animationView.currentProgress = 0
+        print("⚠️ Audio playback failed: \(error)")
     }
 
     // MARK: - Actions

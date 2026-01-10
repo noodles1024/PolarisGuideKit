@@ -175,7 +175,8 @@ Buddy views can adopt plugin-specific protocols when needed:
 ```swift
 final class MyBuddyView: GuideBuddyView, GuideAudioEventReceiving {
     func guideAudioDidStart() { /* update UI */ }
-    func guideAudioDidFinish() { /* update UI */ }
+    func guideAudioDidStop(didPlayToEnd: Bool) { /* update UI */ }
+    func guideAudioDidFail(_ error: Error) { /* update UI */ }
 }
 ```
 

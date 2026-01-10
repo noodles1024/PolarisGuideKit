@@ -404,6 +404,9 @@ enum DemoStrings {
         static var statusFinished: String {
             isChinese ? "播放结束" : "Playback finished"
         }
+        static var statusFailed: String {
+            isChinese ? "播放失败" : "Playback failed"
+        }
         static var statusMissingAudio: String {
             isChinese ? "未找到音频文件" : "Audio file not found"
         }
