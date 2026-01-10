@@ -7,11 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		3F7DC76E2F0521FA00AB6292 /* PolarisGuideKit in Frameworks */ = {isa = PBXBuildFile; productRef = 3F7DC76D2F0521FA00AB6292 /* PolarisGuideKit */; };
 		3F7DC7772F08DBD000AB6292 /* LookinServer in Frameworks */ = {isa = PBXBuildFile; productRef = 3F7DC7762F08DBD000AB6292 /* LookinServer */; };
 		3F7DC7812F0B4AA500AB6292 /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = 3F7DC7802F0B4AA500AB6292 /* Lottie */; };
-		3F7DC7E82F0CEA0100AB6292 /* PolarisGuideKit in Frameworks */ = {isa = PBXBuildFile; productRef = 3F7DC7E72F0CEA0100AB6292 /* PolarisGuideKit */; };
-		3F83FF8C2F0515D40031DC1B /* PolarisGuideKit in Frameworks */ = {isa = PBXBuildFile; productRef = 3F83FF8D2F0515D40031DC1B /* PolarisGuideKit */; };
+		9E08A42E2F12889200F98126 /* PolarisGuideKit in Frameworks */ = {isa = PBXBuildFile; productRef = 9E08A42D2F12889200F98126 /* PolarisGuideKit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -44,10 +42,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				3F83FF8C2F0515D40031DC1B /* PolarisGuideKit in Frameworks */,
 				3F7DC7772F08DBD000AB6292 /* LookinServer in Frameworks */,
-				3F7DC76E2F0521FA00AB6292 /* PolarisGuideKit in Frameworks */,
-				3F7DC7E82F0CEA0100AB6292 /* PolarisGuideKit in Frameworks */,
+				9E08A42E2F12889200F98126 /* PolarisGuideKit in Frameworks */,
 				3F7DC7812F0B4AA500AB6292 /* Lottie in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -96,6 +92,7 @@
 				3F7DC7762F08DBD000AB6292 /* LookinServer */,
 				3F7DC7802F0B4AA500AB6292 /* Lottie */,
 				3F7DC7E72F0CEA0100AB6292 /* PolarisGuideKit */,
+				9E08A42D2F12889200F98126 /* PolarisGuideKit */,
 			);
 			productName = PolarisGuideKitDemo;
 			productReference = 3F83FF742F0515CE0031DC1B /* PolarisGuideKitDemo.app */;
@@ -128,7 +125,7 @@
 			packageReferences = (
 				3F7DC7752F08DBD000AB6292 /* XCRemoteSwiftPackageReference "LookinServer" */,
 				3F7DC77F2F0B4AA500AB6292 /* XCRemoteSwiftPackageReference "lottie-ios" */,
-				3F7DC7E62F0CEA0100AB6292 /* XCLocalSwiftPackageReference "../../PolarisGuideKit" */,
+				9E08A42C2F12889200F98126 /* XCLocalSwiftPackageReference "../../PolarisGuideKit" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 3F83FF752F0515CE0031DC1B /* Products */;
@@ -374,7 +371,7 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		3F7DC7E62F0CEA0100AB6292 /* XCLocalSwiftPackageReference "../../PolarisGuideKit" */ = {
+		9E08A42C2F12889200F98126 /* XCLocalSwiftPackageReference "../../PolarisGuideKit" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../../PolarisGuideKit;
 		};
@@ -419,6 +416,10 @@
 			productName = PolarisGuideKit;
 		};
 		3F83FF8D2F0515D40031DC1B /* PolarisGuideKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = PolarisGuideKit;
+		};
+		9E08A42D2F12889200F98126 /* PolarisGuideKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = PolarisGuideKit;
 		};

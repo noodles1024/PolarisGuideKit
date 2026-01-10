@@ -175,7 +175,8 @@ let controller = GuideController(hostView: view, steps: [step], plugins: [AudioG
 ```swift
 final class MyBuddyView: GuideBuddyView, GuideAudioEventReceiving {
     func guideAudioDidStart() { /* update UI */ }
-    func guideAudioDidFinish() { /* update UI */ }
+    func guideAudioDidStop(didPlayToEnd: Bool) { /* update UI */ }
+    func guideAudioDidFail(_ error: Error) { /* update UI */ }
 }
 ```
 

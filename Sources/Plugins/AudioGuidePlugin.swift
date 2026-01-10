@@ -22,8 +22,15 @@ public final class GuideAudioAttachment: GuideStepAttachment {
 
 /// Optional protocol that a buddy view can adopt to receive audio events.
 public protocol GuideAudioEventReceiving: AnyObject {
+    /// Called right after the plugin starts playback for the current step.
     func guideAudioDidStart()
-    func guideAudioDidFinish()
+    /// Called when the plugin stops playback (or clears the player item).
+    ///
+    /// - Parameter didPlayToEnd: `true` if the audio played to the end naturally. `false` if it was
+    ///   stopped for other reasons (e.g. step/guide dismissed, next step replaced the current item).
+    func guideAudioDidStop(didPlayToEnd: Bool)
+    /// Called when audio playback fails (e.g. network/decoding/format error).
+    func guideAudioDidFail(_ error: Error)
 }
 
 /// Audio playback plugin for guide steps.
@@ -34,12 +41,13 @@ public final class AudioGuidePlugin: GuidePlugin {
 
     private let audioPlayer = AVPlayer()
     private var audioDidFinishObserver: NSObjectProtocol?
+    private var audioDidFailObserver: NSObjectProtocol?
     private weak var currentBuddyView: GuideBuddyView?
 
     public init() {}
 
     deinit {
-        stopPlayback()
+        stopPlayback(didPlayToEnd: false, notifyStop: false)
     }
 
     public func handle(_ event: GuideEvent, context: GuideStepContext) {
@@ -47,14 +55,14 @@ public final class AudioGuidePlugin: GuidePlugin {
         case .stepDidShow:
             startPlaybackIfNeeded(context: context)
         case .stepWillHide, .guideWillHide:
-            stopPlayback()
+            stopPlayback(didPlayToEnd: false)
         default:
             break
         }
     }
 
     private func startPlaybackIfNeeded(context: GuideStepContext) {
-        stopPlayback()
+        stopPlayback(didPlayToEnd: false)
         guard let attachment = context.step.attachment(ofType: GuideAudioAttachment.self) else {
             return
         }
@@ -66,26 +74,56 @@ public final class AudioGuidePlugin: GuidePlugin {
         audioPlayer.play()
 
         notifyAudioDidStart()
-        observePlaybackEnd(for: playerItem)
+        observePlaybackEvents(for: playerItem)
     }
 
-    private func observePlaybackEnd(for item: AVPlayerItem) {
+    private func observePlaybackEvents(for item: AVPlayerItem) {
         if let token = audioDidFinishObserver {
             NotificationCenter.default.removeObserver(token)
         }
+        if let token = audioDidFailObserver {
+            NotificationCenter.default.removeObserver(token)
+        }
+
         audioDidFinishObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: item,
             queue: .main
         ) { [weak self] _ in
-            self?.notifyAudioDidFinish()
+            self?.stopPlayback(didPlayToEnd: true)
+        }
+
+        audioDidFailObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemFailedToPlayToEndTime,
+            object: item,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self else { return }
+            let error = (notification.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error)
+                ?? item.error
+                ?? self.audioPlayer.currentItem?.error
+                ?? self.audioPlayer.error
+                ?? NSError(
+                    domain: "PolarisGuideKit.AudioGuidePlugin",
+                    code: -1,
+                    userInfo: [NSLocalizedDescriptionKey: "Audio playback failed with an unknown error."]
+                )
+            self.notifyAudioDidFail(error)
         }
     }
 
-    private func stopPlayback() {
+    private func stopPlayback(didPlayToEnd: Bool, notifyStop: Bool = true) {
         if let token = audioDidFinishObserver {
             NotificationCenter.default.removeObserver(token)
             audioDidFinishObserver = nil
+        }
+        if let token = audioDidFailObserver {
+            NotificationCenter.default.removeObserver(token)
+            audioDidFailObserver = nil
+        }
+
+        if notifyStop, currentBuddyView != nil, audioPlayer.currentItem != nil {
+            notifyAudioDidStop(didPlayToEnd: didPlayToEnd)
         }
         audioPlayer.pause()
         audioPlayer.replaceCurrentItem(with: nil)
@@ -96,9 +134,13 @@ public final class AudioGuidePlugin: GuidePlugin {
         (currentBuddyView as? GuideAudioEventReceiving)?.guideAudioDidStart()
     }
 
-    private func notifyAudioDidFinish() {
-        (currentBuddyView as? GuideAudioEventReceiving)?.guideAudioDidFinish()
-        // Cleanup the player so a completed item does not linger.
-        stopPlayback()
+    private func notifyAudioDidStop(didPlayToEnd: Bool) {
+        (currentBuddyView as? GuideAudioEventReceiving)?.guideAudioDidStop(didPlayToEnd: didPlayToEnd)
+    }
+
+    private func notifyAudioDidFail(_ error: Error) {
+        (currentBuddyView as? GuideAudioEventReceiving)?.guideAudioDidFail(error)
+        // Per API contract: for failure, only emit `guideAudioDidFail(_:)`, no stop callback.
+        stopPlayback(didPlayToEnd: false, notifyStop: false)
     }
 }
