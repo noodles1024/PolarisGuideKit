@@ -4,7 +4,7 @@
 
 A lightweight UIKit based guide/onboarding ("coach marks") component for highlighting UI elements with a cut-out mask, optional companion views, and step-based orchestration.
 
-🎬 [View Demo Video](https://raw.githubusercontent.com/noodles1024/PolarisGuideKit/main/Screenshots/demo_en.mp4)
+![Demo Animation](https://raw.githubusercontent.com/noodles1024/PolarisGuideKit/main/Screenshots/demo_en_tiny.webp)
 
 ## Features
 
@@ -22,13 +22,23 @@ A lightweight UIKit based guide/onboarding ("coach marks") component for highlig
 - Swift 5.0+
 - UIKit
 
-## Installation (Swift Package Manager)
+## Installation
+
+### Swift Package Manager
 
 1. In Xcode: **File → Add Packages…**
 2. Paste repo URL: `https://github.com/noodles1024/PolarisGuideKit`
 3. Select **PolarisGuideKit**
 
-If you use `Package.swift`, add a dependency on your repo and then:
+### CocoaPods
+
+Add to your Podfile:
+
+```ruby
+pod 'PolarisGuideKit', '~> 1.0.0'
+```
+
+Then in your code:
 
 ```swift
 import PolarisGuideKit
@@ -141,16 +151,22 @@ The closure is called whenever the highlight needs to be updated, ensuring it al
 
 ## Plugins & Attachments
 
-Use plugins for optional behaviors (e.g., audio). Attachments carry per-step data.
+PolarisGuideKit supports extending functionality through a plugin system. Plugins can execute custom logic at different stages of the guide flow, while attachments store per-step data.
+
+### Built-in Plugin Example
+
+**Audio Plugin**: Add background music or voice narration to steps
 
 ```swift
 let step = GuideStep()
 step.focusView = myButton
 
+// Add audio attachment
 if let url = Bundle.main.url(forResource: "guide_step_1", withExtension: "mp3") {
     step.addAttachment(GuideAudioAttachment(url: url, volume: 0.8))
 }
 
+// Enable audio plugin
 let controller = GuideController(hostView: view, steps: [step], plugins: [AudioGuidePlugin()])
 ```
 
@@ -161,6 +177,29 @@ final class MyBuddyView: GuideBuddyView, GuideAudioEventReceiving {
     func guideAudioDidStart() { /* update UI */ }
     func guideAudioDidFinish() { /* update UI */ }
 }
+```
+
+### Custom Plugins
+
+You can create your own plugins by implementing the `GuidePlugin` protocol:
+
+```swift
+final class MyCustomPlugin: GuidePlugin {
+    func guideController(_ controller: GuideController, willShowGuideWith context: GuideContext) {
+        // Logic when guide starts
+    }
+
+    func guideController(_ controller: GuideController, didCompleteStep step: GuideStep, at index: Int, with context: GuideContext) {
+        // Logic when step completes
+    }
+
+    func guideController(_ controller: GuideController, didDismissGuideWith context: GuideContext) {
+        // Logic when guide ends
+    }
+}
+
+// Use custom plugin
+let controller = GuideController(hostView: view, steps: steps, plugins: [MyCustomPlugin()])
 ```
 
 `stepDidShow` fires when the step is configured; `guideDidShow` fires after the overlay fade-in (if animated). Plugins that depend on fully visible UI should wait for `guideDidShow`.
@@ -227,7 +266,7 @@ If you find this project helpful, consider supporting my open source work ☕
 
 ### WeChat Reward (China Users)
 
-![WeChat Reward QR Code](https://raw.githubusercontent.com/noodles1024/PolarisGuideKit/main/Screenshots/wechat_reward_qr.jpg)
+![WeChat Reward QR Code](https://raw.githubusercontent.com/noodles1024/PolarisGuideKit/main/Screenshots/wechat_reward_qr.png)
 
 <!-- Buy Me a Coffee (International Users) -->
 <!-- [!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/noodles1024) -->
