@@ -9,7 +9,7 @@ overlay transitions, customizable buddy views, and optional plugins.
   s.homepage = "https://github.com/noodles1024/PolarisGuideKit"
   s.license = { :type => "MIT", :file => "LICENSE" }
   s.author = { 'noodles' => 'robert1111@qq.com' }
-  s.source = { :git => "https://github.com/noodles1024/PolarisGuideKit", :tag => s.version.to_s }
+  s.source = { :git => "https://github.com/noodles1024/PolarisGuideKit.git", :tag => s.version.to_s }
   s.ios.deployment_target = "12.0"
   s.swift_version = "5.0"
   s.source_files = "Sources/**/*.{swift}"
