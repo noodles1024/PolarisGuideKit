@@ -35,7 +35,7 @@ A lightweight UIKit based guide/onboarding ("coach marks") component for highlig
 Add to your Podfile:
 
 ```ruby
-pod 'PolarisGuideKit', '~> 1.0.0'
+pod 'PolarisGuideKit'
 ```
 
 Then in your code:
