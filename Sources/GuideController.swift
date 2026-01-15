@@ -613,6 +613,11 @@ extension GuideController: UIGestureRecognizerDelegate {
         
         return false
     }
+    
+    private func isWhitelistedGesture(_ gesture: UIGestureRecognizer) -> Bool {
+        guard let step = currentStep() else { return false }
+        return step.gestureRecognizerWhitelist.contains { $0 === gesture }
+    }
 
     public func gestureRecognizer(
         _ gestureRecognizer: UIGestureRecognizer,
@@ -622,8 +627,8 @@ extension GuideController: UIGestureRecognizerDelegate {
         guard isShown() else { return true }  // Safety: don't interfere if not shown
         guard let otherView = otherGestureRecognizer.view else { return false }
         
-        // Allow simultaneous recognition with internal gestures only.
-        return isInternalGestureView(otherView)
+        // Allow simultaneous recognition with internal or whitelisted gestures.
+        return isInternalGestureView(otherView) || isWhitelistedGesture(otherGestureRecognizer)
     }
 
     public func gestureRecognizer(
@@ -634,8 +639,8 @@ extension GuideController: UIGestureRecognizerDelegate {
         guard isShown() else { return false }  // Safety: don't interfere if not shown
         guard let otherView = otherGestureRecognizer.view else { return false }
 
-        // Internal gestures should have priority; blocker's recognition waits for them.
-        return isInternalGestureView(otherView)
+        // Internal or whitelisted gestures should have priority; blocker's recognition waits for them.
+        return isInternalGestureView(otherView) || isWhitelistedGesture(otherGestureRecognizer)
     }
     
     public func gestureRecognizer(
@@ -646,7 +651,7 @@ extension GuideController: UIGestureRecognizerDelegate {
         guard isShown() else { return false }  // Safety: don't block if not shown
         guard let otherView = otherGestureRecognizer.view else { return false }
         
-        // External gestures must wait for the blocker to fail, effectively blocking them.
-        return !isInternalGestureView(otherView)
+        // Non-internal and non-whitelisted gestures must wait for the blocker to fail.
+        return !(isInternalGestureView(otherView) || isWhitelistedGesture(otherGestureRecognizer))
     }
 }

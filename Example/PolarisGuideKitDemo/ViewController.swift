@@ -17,6 +17,7 @@ enum DemoCase: Int, CaseIterable {
     case dismissOnOutsideTap
     case guideWithAudio
     case dynamicFocusView
+    case dynamicFocusTouchForwarding
     
     var title: String {
         switch self {
@@ -34,6 +35,8 @@ enum DemoCase: Int, CaseIterable {
             return DemoStrings.DemoCases.audioGuideTitle
         case .dynamicFocusView:
             return DemoStrings.DynamicFocus.title
+        case .dynamicFocusTouchForwarding:
+            return DemoStrings.DynamicFocusTouchForwarding.title
         }
     }
     
@@ -53,6 +56,8 @@ enum DemoCase: Int, CaseIterable {
             return DemoStrings.DemoCases.dismissOnOutsideTapSubtitle
         case .dynamicFocusView:
             return DemoStrings.DynamicFocus.subtitle
+        case .dynamicFocusTouchForwarding:
+            return DemoStrings.DynamicFocusTouchForwarding.subtitle
         }
     }
     
@@ -72,6 +77,8 @@ enum DemoCase: Int, CaseIterable {
             return DismissOnOutsideTapDemoVC()
         case .dynamicFocusView:
             return DynamicFocusViewDemoVC()
+        case .dynamicFocusTouchForwarding:
+            return DynamicFocusTouchForwardingDemoVC()
         }
     }
 }

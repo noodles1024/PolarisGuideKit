@@ -12,7 +12,7 @@
 - 高亮区域自动跟踪 focusView 位置变化，适配屏幕旋转、动画等场景
 - 以步骤编排的新手引导流程：`GuideController` + `GuideStep`
 - 通过继承实现任意说明/箭头/按钮视图：`GuideBuddyView`
-- 可自定义的自动"完成条件"：`GuideAutoCompleter`、`ControlEventCompleter`
+- 可自定义的自动"完成条件"：`GuideAutoCompleter`、`ControlEventCompleter`、`GestureRecognizerCompleter`
 - 可插拔的步骤扩展（插件 + 附件，例如音频播放、埋点事件上报、引导显示标志保存等）
 - 侵入性小，能很好地保持原有业务逻辑
 
@@ -252,6 +252,11 @@ flowchart TB
 
 - 确保 `step.forwardsTouchEventsToFocusView = true`
 - 确保 focusView 与 overlay 在同一个 window
+
+### 手势识别器没有触发
+
+- 确保手势已加入 `step.gestureRecognizerWhitelist`
+- 如果手势挂在 tableView/collectionView 上，仍需要白名单放行
 
 ### 多 window / 多 scene 场景
 

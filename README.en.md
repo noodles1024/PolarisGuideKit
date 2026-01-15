@@ -12,7 +12,7 @@ A lightweight UIKit based guide/onboarding ("coach marks") component for highlig
 - Auto-tracking of focus view position changes, adapting to screen rotation, animations, and more
 - Step-based guide orchestration (`GuideController` + `GuideStep`)
 - Companion overlay UI via subclassing (`GuideBuddyView`)
-- Customized auto-completion triggers (`GuideAutoCompleter`, `ControlEventCompleter`)
+- Customized auto-completion triggers (`GuideAutoCompleter`, `ControlEventCompleter`, `GestureRecognizerCompleter`)
 - Pluggable step extensions via plugins and attachments (e.g., audio playback, analytics tracking, guide-shown flag persistence)
 - Minimal intrusion, preserving your existing business logic
 
@@ -252,6 +252,11 @@ flowchart TB
 
 - Ensure `step.forwardsTouchEventsToFocusView = true`
 - Ensure the focus view is in the same window as the overlay
+
+### Gesture recognizer doesn't fire
+
+- Add the recognizer to `step.gestureRecognizerWhitelist`
+- Gestures attached to table/collection views also need to be whitelisted
 
 ### Multi-window / multi-scene apps
 

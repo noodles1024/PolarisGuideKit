@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		3F1778032F1782AD00C9394A /* PolarisGuideKit in Frameworks */ = {isa = PBXBuildFile; productRef = 3F83FF8D2F0515D40031DC1B /* PolarisGuideKit */; };
+		3F1778042F1782AD00C9394A /* PolarisGuideKit in Frameworks */ = {isa = PBXBuildFile; productRef = 3F7DC76D2F0521FA00AB6292 /* PolarisGuideKit */; };
+		3F1778052F1782AD00C9394A /* PolarisGuideKit in Frameworks */ = {isa = PBXBuildFile; productRef = 3F7DC7E72F0CEA0100AB6292 /* PolarisGuideKit */; };
 		3F7DC7772F08DBD000AB6292 /* LookinServer in Frameworks */ = {isa = PBXBuildFile; productRef = 3F7DC7762F08DBD000AB6292 /* LookinServer */; };
 		3F7DC7812F0B4AA500AB6292 /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = 3F7DC7802F0B4AA500AB6292 /* Lottie */; };
 		9E08A42E2F12889200F98126 /* PolarisGuideKit in Frameworks */ = {isa = PBXBuildFile; productRef = 9E08A42D2F12889200F98126 /* PolarisGuideKit */; };
@@ -42,6 +45,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3F1778052F1782AD00C9394A /* PolarisGuideKit in Frameworks */,
+				3F1778042F1782AD00C9394A /* PolarisGuideKit in Frameworks */,
+				3F1778032F1782AD00C9394A /* PolarisGuideKit in Frameworks */,
 				3F7DC7772F08DBD000AB6292 /* LookinServer in Frameworks */,
 				9E08A42E2F12889200F98126 /* PolarisGuideKit in Frameworks */,
 				3F7DC7812F0B4AA500AB6292 /* Lottie in Frameworks */,

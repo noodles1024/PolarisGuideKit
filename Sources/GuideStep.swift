@@ -88,6 +88,13 @@ public final class GuideStep {
     ///              doesn't handle touches (e.g., a `UILabel`), this property has no effect.
     /// - Note: Defaults to `false`.
     public var forwardsTouchEventsToFocusView: Bool = false
+
+    /// Gesture recognizers allowed to recognize while the guide is visible.
+    ///
+    /// GuideController installs a blocking gesture to prevent external gestures (like scroll views
+    /// or navigation swipes) from interfering. Add gesture recognizers here to allow them to work
+    /// alongside the guide overlay.
+    public var gestureRecognizerWhitelist: [UIGestureRecognizer] = []
     
     /// Visual style applied to the focus area.
     ///

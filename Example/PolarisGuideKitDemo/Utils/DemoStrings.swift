@@ -187,6 +187,54 @@ enum DemoStrings {
         }
     }
     
+    // MARK: - DynamicFocusTouchForwarding Result ViewController
+    
+    enum DynamicFocusTouchForwardingResult {
+        static var title: String {
+            isChinese ? "卡片点击结果" : "Card Tap Result"
+        }
+        
+        static var successTitle: String {
+            isChinese ? "🎉 点击成功" : "🎉 Tap Success"
+        }
+        
+        static var explanationTitle: String {
+            isChinese ? "这说明了什么？" : "What does this show?"
+        }
+        
+        static var explanationText: String {
+            if isChinese {
+                return """
+                您是通过 collectionView 的 didSelect 点击进入了这个页面，同时引导被自动关闭。
+                
+                这说明：
+                
+                ✅ reloadData 后 focusViewProvider 仍能定位正确的 cell
+                ✅ 引导遮罩不会阻断 cell 的点击行为
+                ✅ 通过白名单手势放行了点击手势
+                
+                将需要识别的手势加入 step.gestureRecognizerWhitelist，就能在阻断外部手势的同时保留必要交互。
+                """
+            } else {
+                return """
+                You navigated here via collectionView didSelect, and the guide dismissed automatically.
+                
+                This shows:
+                
+                ✅ focusViewProvider still targets the correct cell after reloadData
+                ✅ The guide overlay does not block cell taps
+                ✅ The tap recognizer is allowed through the whitelist
+                
+                Add the gesture to step.gestureRecognizerWhitelist to preserve necessary interactions while blocking external gestures.
+                """
+            }
+        }
+        
+        static var codeComment: String {
+            isChinese ? "// 关键代码" : "// Key code"
+        }
+    }
+    
     // MARK: - RoundedRect Demo
     
     enum RoundedRect {
@@ -521,6 +569,42 @@ enum DemoStrings {
         }
         static var staticBuddyMessage: String {
             isChinese ? "⏱ 2秒后将调用 reloadData...\n\n请注意观察：reloadData 后高亮区域可能会错位或消失，因为原 cell 已被复用。" : "⏱ reloadData will be called in 2 seconds...\n\nObserve: After reloadData, the highlight may shift or disappear because the original cell was reused."
+        }
+    }
+    
+    // MARK: - DynamicFocusView + TouchForwarding Demo
+    
+    enum DynamicFocusTouchForwarding {
+        static var title: String {
+            isChinese ? "动态 FocusView & 触摸转发" : "Dynamic FocusView & Touch Forwarding"
+        }
+        static var subtitle: String {
+            isChinese ? "CollectionView reloadData 后高亮仍可点击并自动完成引导" : "After reloadData, the highlighted cell stays interactive and auto-completes"
+        }
+        
+        static var itemPrefix: String {
+            isChinese ? "示例卡片" : "Sample Card"
+        }
+        
+        static var focusInfoTitle: String {
+            "focusViewProvider + reloadData"
+        }
+        static var focusInfoDesc: String {
+            isChinese ? "引导显示后立即触发 reloadData。focusViewProvider 会返回新的第一个 cell，高亮区域会自动更新。" : "reloadData is called immediately after the guide appears. focusViewProvider returns the new first cell and the highlight updates automatically."
+        }
+        
+        static var touchInfoTitle: String {
+            "GestureRecognizerCompleter"
+        }
+        static var touchInfoDesc: String {
+            isChinese ? "手势挂在 CollectionView 上，点击高亮 cell 时引导自动消失，同时不影响 didSelect 的页面跳转。" : "Attach the gesture to the collection view. Tapping the highlighted cell dismisses the guide while preserving didSelect navigation."
+        }
+        
+        static var buddyTitle: String {
+            isChinese ? "点击高亮卡片" : "Tap the Highlighted Card"
+        }
+        static var buddyMessage: String {
+            isChinese ? "引导显示后会立刻 reloadData。\n\n请点击高亮的第一个卡片进入结果页，引导会自动消失，点击事件也会正常传递。" : "reloadData runs immediately after the guide shows.\n\nTap the highlighted first card to navigate. The guide will dismiss and the tap will still be forwarded."
         }
     }
 }
