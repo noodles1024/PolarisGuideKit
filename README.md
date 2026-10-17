@@ -22,6 +22,8 @@
 - Swift 5.0+
 - UIKit
 
+所有涉及 UIKit 的创建、配置、展示、切步、隐藏和刷新操作都应在主线程执行，`focusViewProvider` 也会在这些操作中被调用。
+
 ## 安装
 
 ### Swift Package Manager
@@ -53,8 +55,9 @@ import PolarisGuideKit
 final class MyViewController: UIViewController {
     private var guide: GuideController?
 
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        // 此处假设 myButton 已添加到 view 中。
 
         let step1 = GuideStep()
         step1.focusView = myButton
@@ -67,8 +70,13 @@ final class MyViewController: UIViewController {
             print("引导结束。原因=\(context.reason)")
         }
 
-        _ = controller.show()
+        // 创建时不要求 view 或 myButton 已进入 window。
         guide = controller
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        guide?.show()
     }
 }
 ```
@@ -186,16 +194,20 @@ final class MyBuddyView: GuideBuddyView, GuideAudioEventReceiving {
 
 ```swift
 final class MyCustomPlugin: GuidePlugin {
-    func guideController(_ controller: GuideController, willShowGuideWith context: GuideContext) {
-        // 引导开始时的逻辑
-    }
-
-    func guideController(_ controller: GuideController, didCompleteStep step: GuideStep, at index: Int, with context: GuideContext) {
-        // 步骤完成时的逻辑
-    }
-
-    func guideController(_ controller: GuideController, didDismissGuideWith context: GuideContext) {
-        // 引导结束时的逻辑
+    func handle(_ event: GuideEvent, context: GuideStepContext) {
+        switch event {
+        case .guideWillShow:
+            // 引导即将显示，可通过 context.step 获取步骤配置。
+            break
+        case .stepDidHide:
+            // 步骤已隐藏；这不一定代表用户完成了该步骤。
+            break
+        case .guideDidHide:
+            // 引导已隐藏。
+            break
+        default:
+            break
+        }
     }
 }
 
@@ -260,7 +272,34 @@ flowchart TB
 
 ### 多 window / 多 scene 场景
 
-建议显式传入 `hostView`（`GuideController(hostView:steps:)`），避免"key window"歧义。
+根据引导的覆盖范围显式传入 `view`、`navigationController.view` 或业务窗口。可以在 `viewDidLoad` 中创建并持有 controller，此时不要求 `focusView.window` 非空。只有需要覆盖整个窗口且准备从焦点获取窗口时，才需要等待 `focusView.window` 可用。
+
+宿主选择遵循以下顺序：
+
+1. 显式 `hostView` 优先。调用 `show()` 时焦点视图必须属于该宿主的视图树；两者都尚未进入 window 也可以挂载引导，无需等待 scene 激活。`isShown()` 表示引导已挂载，并不表示宿主当前已在屏幕上可见。
+2. `hostView == nil` 时，使用当前焦点视图的 `window`；焦点尚未进入窗口时，`show()` 返回 `false`，可稍后重试。已有焦点所属窗口时，不会再通过全局 key window 猜测目标窗口。
+3. 配置了 `focusViewProvider`，但它暂时返回 `nil`，且没有显式宿主时，`show()` 返回 `false`。等待 cell/目标视图挂载后重试。
+4. 完全没有配置焦点（例如只有 Buddy View）时，才尝试自动查找窗口。使用 scene 的应用必须只有一个 `.foregroundActive` 的 `.windowApplication` scene，且其中有合适、无歧义的窗口；非交互外接显示器 scene 不参与自动回退。存在多个活跃应用 scene 时，请显式传入宿主。iOS 12 或没有连接 scene 的传统应用使用前台应用主屏幕上的合适窗口。
+
+初始化和 `addStep(_:)` 只保存步骤配置，不要求焦点已经挂载。`show()` / 切步时才检查焦点是否属于宿主，避免跨视图树创建约束。宿主不可用或层级不匹配时返回 `false`，可以稍后重试。活跃 scene 的限制只用于第 4 种缺少上下文的自动窗口查找。完全没有焦点配置和 Buddy View 的空步骤仍会被忽略。
+
+快速开始选择在 `viewDidAppear` 调用 `show()`，这只是示例时机。若焦点已在显式宿主的视图树中，也可以在 `viewDidLoad` 调用 `show()`；若导航容器尚未将页面加入层级，可以先创建 controller，待层级就绪后再展示。
+
+每次成功展示后，宿主在本次展示期间保持固定。key window 切换不会让引导迁移到其他窗口，也不会影响 `hide()` 清理原宿主。绑定的 scene 断开连接时，引导会自动隐藏，并通过 `onDismiss` 返回 `.programmatic` 原因。普通屏幕镜像沿用业务界面所在窗口；有独立外接显示器界面时，应使用那个界面的焦点或显式宿主。
+
+也可以先调用 `showStep(at:)` / `showNextStep()` 选择起始步骤，再调用 `show()`。预选阶段只记录步骤，不创建跨视图树约束，也不发送展示事件。
+
+## 回归测试
+
+独立测试工程覆盖窗口选择、scene 生命周期、引导布局和交互，以及音频回调等场景，无需安装 Demo 的外部依赖。在仓库根目录运行：
+
+```sh
+xcodebuild -project Tests/PolarisGuideKitTests.xcodeproj \
+  -scheme PolarisGuideKitTests \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test
+```
+
+请将 `iPhone 17 Pro` 替换为本机已安装的模拟器名称。组件库仍支持 iOS 12+；用于验证 Window Scene 的测试宿主要求 iOS 13+。
 
 ## License
 

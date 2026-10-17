@@ -22,6 +22,8 @@ A lightweight UIKit based guide/onboarding ("coach marks") component for highlig
 - Swift 5.0+
 - UIKit
 
+Perform all UIKit-related creation, configuration, presentation, step changes, dismissal, and refresh operations on the main thread. `focusViewProvider` is also called during these operations.
+
 ## Installation
 
 ### Swift Package Manager
@@ -53,8 +55,9 @@ import PolarisGuideKit
 final class MyViewController: UIViewController {
     private var guide: GuideController?
 
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        // Assume myButton has already been added to view.
 
         let step1 = GuideStep()
         step1.focusView = myButton
@@ -67,8 +70,13 @@ final class MyViewController: UIViewController {
             print("Guide dismissed. reason=\(context.reason)")
         }
 
-        _ = controller.show()
+        // Neither view nor myButton needs a window during initialization.
         guide = controller
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        guide?.show()
     }
 }
 ```
@@ -186,16 +194,20 @@ You can create your own plugins by implementing the `GuidePlugin` protocol:
 
 ```swift
 final class MyCustomPlugin: GuidePlugin {
-    func guideController(_ controller: GuideController, willShowGuideWith context: GuideContext) {
-        // Logic when guide starts
-    }
-
-    func guideController(_ controller: GuideController, didCompleteStep step: GuideStep, at index: Int, with context: GuideContext) {
-        // Logic when step completes
-    }
-
-    func guideController(_ controller: GuideController, didDismissGuideWith context: GuideContext) {
-        // Logic when guide ends
+    func handle(_ event: GuideEvent, context: GuideStepContext) {
+        switch event {
+        case .guideWillShow:
+            // The guide is about to appear. Access its step through context.step.
+            break
+        case .stepDidHide:
+            // The step was hidden; this does not necessarily mean the user completed it.
+            break
+        case .guideDidHide:
+            // The guide was hidden.
+            break
+        default:
+            break
+        }
     }
 }
 
@@ -260,7 +272,34 @@ flowchart TB
 
 ### Multi-window / multi-scene apps
 
-Prefer passing an explicit `hostView` to `GuideController(hostView:steps:)` to avoid ambiguity.
+Pass `view`, `navigationController.view`, or your app window according to the area the guide should cover. You can create and retain the controller in `viewDidLoad` with a nil `focusView.window`. Wait for that window only when you need to obtain it from the focus view to cover the entire window.
+
+Host selection follows this order:
+
+1. An explicit `hostView` takes priority. At `show()` time, the focus must belong to its view hierarchy. Both views can still be outside a window; scene activation is not required. `isShown()` reports attachment to the host, not whether the host is currently visible on screen.
+2. When `hostView == nil`, the current focus view's `window` is used. If the focus is not attached to a window yet, `show()` returns `false` and can be retried. Once that window is available, no global key-window lookup is needed.
+3. If a `focusViewProvider` is configured but currently returns `nil`, and no explicit host was supplied, `show()` returns `false`. Retry after the cell or target view is attached.
+4. Automatic window lookup is used only when no focus is configured, such as a buddy-only step. A scene-based app must have exactly one `.foregroundActive` scene with the `.windowApplication` role and a suitable, unambiguous window in that scene. Noninteractive external-display scenes are excluded from this fallback. Supply an explicit host when multiple application scenes are active. On iOS 12, or in a legacy app with no connected scenes, the fallback uses a suitable window on the main screen while the app is active.
+
+Initialization and `addStep(_:)` store step configuration without requiring the focus to be attached. `show()` and step transitions validate the host/focus hierarchy before creating constraints. An unavailable host or mismatched hierarchy returns `false` and can be retried later. The active-scene requirement applies only to the context-free automatic lookup in rule 4. Empty steps with neither a focus configuration nor a buddy view are still ignored.
+
+Quick Start uses `viewDidAppear` as one possible presentation time. You can also call `show()` in `viewDidLoad` when the focus already belongs to the explicit host. If a navigation container has not attached the page yet, create the controller first and show it once that hierarchy is ready.
+
+Each successful presentation stays bound to its original host. Changing the key window does not move the guide elsewhere or prevent `hide()` from cleaning up the original host. Disconnecting the bound scene automatically hides the guide and reports `.programmatic` through `onDismiss`. Screen mirroring uses the window containing your app UI; for a separate external-display interface, use that interface's focus view or an explicit host.
+
+You can also use `showStep(at:)` or `showNextStep()` to select a starting step before calling `show()`. Preselection only records the step; it creates no cross-hierarchy constraints and sends no presentation events.
+
+## Regression Tests
+
+The standalone test project covers window selection, scene lifecycle, guide layout and interaction, and audio callbacks. It does not require the Demo's external dependencies. Run this command from the repository root:
+
+```sh
+xcodebuild -project Tests/PolarisGuideKitTests.xcodeproj \
+  -scheme PolarisGuideKitTests \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test
+```
+
+Replace `iPhone 17 Pro` with a simulator installed on your machine. The library continues to support iOS 12+; the test host requires iOS 13+ to exercise Window Scene behavior.
 
 ## License
 

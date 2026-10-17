@@ -94,6 +94,11 @@ open class GuideBuddyView: UIView {
     open func updateLayout(referenceLayoutGuide layoutGuide: UILayoutGuide, focusView: UIView) {
         contentReferenceLayoutGuide = layoutGuide
     }
+
+    /// Clears a reference whose tracked focus view or presentation has gone away.
+    internal func clearLayoutReference() {
+        contentReferenceLayoutGuide = nil
+    }
     
     /// Requests the guide controller to advance to the next step.
     public func requestNext() {

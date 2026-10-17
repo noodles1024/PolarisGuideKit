@@ -33,10 +33,20 @@ internal final class GuideOverlayView: MaskOverlayView {
     
     // MARK: - Properties
     
-    /// The view that hosts this guide overlay.
-    ///
-    /// If `nil`, the key window is used as the host.
+    /// The host bound for the current presentation. It never follows global key-window changes.
     private(set) weak var hostView: UIView?
+
+    /// Notifies the controller to reconnect the buddy view to the current shadow's layout guide.
+    var onShadowChanged: (() -> Void)?
+
+    private var shadowConstraints: [NSLayoutConstraint] = []
+    private var isSynchronizingShadow = false
+
+    /// A focus view is usable only while it shares the bound host's hierarchy with the overlay.
+    internal var validatedFocusView: UIView? {
+        guard let focusView = step?.focusView, isValidFocusView(focusView) else { return nil }
+        return focusView
+    }
     
     /// The current guide step being displayed.
     ///
@@ -49,12 +59,14 @@ internal final class GuideOverlayView: MaskOverlayView {
     ///   - step: The new guide step to display, or `nil` to clear the current step.
     ///   - animated: Whether to animate the mask transition.
     internal func setStep(_ step: GuideStep?, animated: Bool) {
-        let oldStep = self.step
         self.step = step
-        if step !== oldStep {
-            setupShadowOfFocusView()
-            refreshMask(animated: animated)
-        }
+        refreshMask(animated: animated && step != nil)
+    }
+
+    /// Binds the overlay to the host chosen for this presentation, after attachment.
+    internal func bind(to host: UIView?) {
+        hostView = host
+        refreshMask(animated: false)
     }
     
     /// Shadow view tracking the current focus view.
@@ -72,6 +84,9 @@ internal final class GuideOverlayView: MaskOverlayView {
     /// Used as a fallback when presentation layer is not yet available
     /// (e.g., when layoutSubviews is called immediately after setting a new mask layer).
     private var lastAnimationFromPath: CGPath?
+
+    /// Invalidates completion callbacks belonging to replaced or cleared masks.
+    private var maskAnimationGeneration: UInt = 0
     
     /// Indicates that layout changed during animation and mask needs refresh after animation completes.
     private var needsRefreshAfterAnimation: Bool = false
@@ -84,8 +99,7 @@ internal final class GuideOverlayView: MaskOverlayView {
     // MARK: - Initialization
     
     init(hostView: UIView?) {
-        self.hostView = hostView
-        let bounds = hostView?.bounds ?? UIScreen.main.bounds
+        let bounds = hostView?.bounds ?? .zero
         super.init(frame: bounds)
         commonInit()
     }
@@ -116,12 +130,11 @@ internal final class GuideOverlayView: MaskOverlayView {
     override func layoutSubviews() {
         super.layoutSubviews()
         
-        // Check if focusView has changed (for dynamic provider scenarios,
-        // e.g., UITableView/UICollectionView cell reuse after reloadData)
-        if let currentFocusView = step?.focusView,
-           currentFocusView !== shadowOfFocusView?.masterView {
-            // focusView instance changed, rebuild shadow view constraints
-            setupShadowOfFocusView()
+        synchronizeShadowOfFocusView()
+
+        guard step != nil, isAttachedToBoundHost else {
+            refreshMask(animated: false)
+            return
         }
         
         if !isInTransitionAnimation {
@@ -142,8 +155,8 @@ internal final class GuideOverlayView: MaskOverlayView {
     
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         // If `super.hitTest` returns `self`, we may need to forward the touch to the focus view.
-        guard let host = resolvedHostView() else { return nil }
-        if superview?.superview != host { return nil }
+        guard isAttachedToBoundHost else { return nil }
+        synchronizeShadowOfFocusView()
         
         guard let step = step else {
             return nil
@@ -163,8 +176,7 @@ internal final class GuideOverlayView: MaskOverlayView {
         
         let shouldForwardEvent = step.forwardsTouchEventsToFocusView
         if shouldForwardEvent,
-           let focusView = step.focusView,
-           window == focusView.window {
+           let focusView = validatedFocusView {
             let pointInView = convert(point, to: focusView)
             if let responderInView = focusView.hitTest(pointInView, with: event) {
                 return responderInView
@@ -183,11 +195,46 @@ internal final class GuideOverlayView: MaskOverlayView {
     
     // MARK: - Private Methods
     
-    private func setupShadowOfFocusView() {
+    private var isAttachedToBoundHost: Bool {
+        guard let hostView = hostView else { return false }
+        return isDescendant(of: hostView) && window === ((hostView as? UIWindow) ?? hostView.window)
+    }
+
+    private func isValidFocusView(_ focusView: UIView) -> Bool {
+        guard let hostView = hostView, isAttachedToBoundHost else { return false }
+        return focusView !== hostView
+            && focusView.isDescendant(of: hostView)
+            && window === focusView.window
+    }
+
+    private func synchronizeShadowOfFocusView() {
+        guard !isSynchronizingShadow else { return }
+        isSynchronizingShadow = true
+        var didChangeShadow = false
+        defer {
+            isSynchronizingShadow = false
+            // Buddy callbacks can dismiss or refresh the guide. Finish updating our
+            // state first so those operations can synchronously clear the shadow.
+            if didChangeShadow { onShadowChanged?() }
+        }
+
+        let focusView = validatedFocusView
+        if let focusView = focusView,
+           shadowOfFocusView?.masterView === focusView,
+           shadowOfFocusView?.superview === self,
+           shadowConstraints.count == 4,
+           shadowConstraints.allSatisfy({ $0.isActive }) {
+            return
+        }
+
+        let hadShadow = shadowOfFocusView != nil
+        NSLayoutConstraint.deactivate(shadowConstraints)
+        shadowConstraints.removeAll()
         shadowOfFocusView?.removeFromSuperview()
         shadowOfFocusView = nil
         
-        guard let step = step, let focusView = step.focusView else {
+        guard let focusView = focusView else {
+            didChangeShadow = hadShadow
             return
         }
         
@@ -195,33 +242,34 @@ internal final class GuideOverlayView: MaskOverlayView {
         shadowView.translatesAutoresizingMaskIntoConstraints = false
         addSubview(shadowView)
         
-        NSLayoutConstraint.activate([
+        shadowConstraints = [
             shadowView.leftAnchor.constraint(equalTo: focusView.leftAnchor),
             shadowView.rightAnchor.constraint(equalTo: focusView.rightAnchor),
             shadowView.topAnchor.constraint(equalTo: focusView.topAnchor),
             shadowView.bottomAnchor.constraint(equalTo: focusView.bottomAnchor)
-        ])
+        ]
+        NSLayoutConstraint.activate(shadowConstraints)
         
         shadowOfFocusView = shadowView
+        didChangeShadow = true
     }
     
     private func createLayerMask() -> CAShapeLayer? {
-        guard let step = step else {
+        guard let step = step, isAttachedToBoundHost else {
             return nil
         }
         
         let completePath = UIBezierPath(rect: bounds)
-        guard let decidedHost = resolvedHostView() else { return nil }
         
         // Highlight focus view
-        if let focusView = step.focusView, focusView.superview != nil {
-            // Ensure the entire view hierarchy is laid out before converting coordinates.
-            //decidedHost.layoutIfNeeded()
+        if let focusView = validatedFocusView {
             focusView.superview?.layoutIfNeeded()
-            
-            let rectInHostView = focusView.convert(focusView.bounds, to: decidedHost)
-            if let path = step.focusStyle.highlightPath(for: focusView, frameInOverlay: rectInHostView) {
-                completePath.append(path)
+            // Layout callbacks may remove or move the focus view to another hierarchy.
+            if isValidFocusView(focusView) {
+                let rectInOverlay = focusView.convert(focusView.bounds, to: self)
+                if let path = step.focusStyle.highlightPath(for: focusView, frameInOverlay: rectInOverlay) {
+                    completePath.append(path)
+                }
             }
         }
         
@@ -276,6 +324,11 @@ internal final class GuideOverlayView: MaskOverlayView {
     ///   When `animated` is `false`, any ongoing animation is immediately cancelled
     ///   and the mask jumps to the final state.
     private func refreshMask(animated: Bool, completion: (() -> Void)?) {
+        maskAnimationGeneration &+= 1
+        let animationGeneration = maskAnimationGeneration
+        synchronizeShadowOfFocusView()
+        guard maskAnimationGeneration == animationGeneration else { return }
+
         // Reset the flag since we're refreshing now
         needsRefreshAfterAnimation = false
         
@@ -287,7 +340,7 @@ internal final class GuideOverlayView: MaskOverlayView {
             if let presentationPath = oldMaskLayer.presentation()?.path {
                 // Presentation layer is available, use its path (animation intermediate state)
                 currentDisplayedPath = presentationPath
-            } else if let savedFromPath = lastAnimationFromPath {
+            } else if isInTransitionAnimation, let savedFromPath = lastAnimationFromPath {
                 // Presentation layer not yet created (happens when layoutSubviews is called
                 // immediately after setting a new mask layer). Use the saved from path.
                 currentDisplayedPath = savedFromPath
@@ -300,17 +353,22 @@ internal final class GuideOverlayView: MaskOverlayView {
         // 2. Create and apply the new mask layer.
         //    This replaces the old mask layer, effectively cancelling any ongoing animation.
         let maskLayer = createLayerMask()
+        // Layout and style callbacks can synchronously clear or refresh this overlay.
+        // A superseded refresh must not restore its old mask after that operation.
+        guard maskAnimationGeneration == animationGeneration else { return }
+        layer.mask?.removeAllAnimations()
         layer.mask = maskLayer
         
         // 3. Reset animation state since the old mask layer (and its animation) is now removed.
         isInTransitionAnimation = false
+        lastAnimationFromPath = nil
         
         // 4. If animation is requested, animate from the current displayed path to the new path.
         if animated,
            let maskLayer = maskLayer,
            let fromPath = currentDisplayedPath,
            let step = step,
-           step.canShowTransitionAnimation() {
+           validatedFocusView != nil || !step.additionalHighlightPaths.isEmpty {
             
             // Save the from path for potential use in subsequent calls
             // when presentation layer is not yet available
@@ -327,7 +385,9 @@ internal final class GuideOverlayView: MaskOverlayView {
                     completion?()
                     return
                 }
+                guard self.maskAnimationGeneration == animationGeneration else { return }
                 self.isInTransitionAnimation = false
+                self.lastAnimationFromPath = nil
                 // If layout changed during animation, refresh mask now
                 if self.needsRefreshAfterAnimation {
                     self.needsRefreshAfterAnimation = false
@@ -335,9 +395,9 @@ internal final class GuideOverlayView: MaskOverlayView {
                 }
                 completion?()
             }
+            isInTransitionAnimation = true
             maskLayer.add(animation, forKey: "maskLayerPathTransition")
             CATransaction.commit()
-            isInTransitionAnimation = true
         } else {
             // No animation, call completion immediately
             completion?()
@@ -346,11 +406,9 @@ internal final class GuideOverlayView: MaskOverlayView {
     
     // MARK: - Public Methods
     
-    /// Returns the effective host view for displaying the guide overlay.
-    ///
-    /// - Returns: The `hostView` if set; otherwise, the key window.
+    /// Returns the host bound to this presentation, or `nil` while unbound.
     internal func resolvedHostView() -> UIView? {
-        return hostView ?? PolarisKeyWindowProvider.keyWindow()
+        return hostView
     }
 }
 

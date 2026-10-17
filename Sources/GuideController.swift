@@ -96,12 +96,13 @@ public final class GuideController: NSObject {
     
     /// The view that hosts the guide overlay.
     ///
-    /// If `nil`, the key window is used as the host.
+    /// If `nil`, the focus view's window is used. A guide without a focus view
+    /// uses an unambiguous foreground application window.
     public private(set) weak var hostView: UIView?
     
-    /// Index of the currently displayed guide item.
+    /// Index of the currently displayed or preselected guide item.
     ///
-    /// - Note: Returns `-1` when no item is showing or before `show()` is called.
+    /// - Note: Starts at `-1` and resets to `-1` when the guide is hidden.
     public private(set) var currentStepIndex: Int = -1
     
     /// Closure called when the current guide item changes.
@@ -148,16 +149,17 @@ public final class GuideController: NSObject {
     
     private let containerView: GuideContainerView
     private let overlayView: GuideOverlayView
+    private let usesAutomaticHost: Bool
+    private weak var presentationHostView: UIView?
+    private var presentationID: UUID?
+    private var sceneDisconnectObserver: NSObjectProtocol?
+    private var isDismissing = false
+    private var isChangingStep = false
+    private var stepChangeGeneration: UInt = 0
     
     /// A gesture recognizer that blocks external gestures while the guide is displayed.
     /// Added to hostView to intercept all touches including those in focusView area.
-    private lazy var blockingGesture: BlockAllGestureRecognizer = {
-        let gesture = BlockAllGestureRecognizer(target: self, action: #selector(handleBlockingGesture(_:)))
-        gesture.delegate = self
-        gesture.cancelsTouchesInView = false
-        gesture.delaysTouchesBegan = false
-        return gesture
-    }()
+    private let blockingGesture = BlockAllGestureRecognizer(target: nil, action: nil)
     
     @objc private func handleBlockingGesture(_ gesture: UIGestureRecognizer) {
         // Empty implementation - the gesture just needs to be recognized to block others.
@@ -173,19 +175,29 @@ public final class GuideController: NSObject {
     /// Creates a guide controller with the specified host view and initial steps.
     ///
     /// - Parameters:
-    ///   - hostView: The view that will host the guide overlay. If `nil`, the key window is used.
+    ///   - hostView: The view that will host the guide overlay. If `nil`, the focus view's
+    ///               window is preferred, followed by an unambiguous foreground window.
     ///   - steps: Initial steps for the sequence. Invalid steps are automatically filtered out.
     ///   - plugins: Plugins that will receive guide lifecycle events.
     ///
-    /// - Important: In debug builds, this initializer will `fatalError` if any focus view is not a
-    ///              descendant of the resolved host view.
+    /// - Important: The focus/host hierarchy is checked when displaying a step.
+    ///              An explicit host and its focus views do not need a window,
+    ///              either during initialization or when calling `show()`.
     public init(hostView: UIView?, steps: [GuideStep] = [], plugins: [GuidePlugin] = []) {
         self.hostView = hostView
-        let bounds = hostView?.bounds ?? UIScreen.main.bounds
+        self.usesAutomaticHost = hostView == nil
+        let bounds = hostView?.bounds ?? .zero
         self.containerView = GuideContainerView(frame: bounds)
         self.overlayView = GuideOverlayView(hostView: hostView)
         self.plugins = plugins
         super.init()
+
+        // Configure while self is alive; lazy initialization during deinit would
+        // try to establish UIKit's weak target/delegate reference to a dying object.
+        blockingGesture.addTarget(self, action: #selector(handleBlockingGesture(_:)))
+        blockingGesture.delegate = self
+        blockingGesture.cancelsTouchesInView = false
+        blockingGesture.delaysTouchesBegan = false
                 
         overlayView.onOutsideTap = { [weak self] in
             guard let self = self else { return }
@@ -194,43 +206,66 @@ public final class GuideController: NSObject {
         
         addOverlayToContainerIfNeeded()
         
-        for step in steps {
-            let illegal = isFocusViewIllegal(step.focusView)
-            #if DEBUG
-            if illegal {
-                var errorMsg = "Focus view is illegal:\(step.focusView?.description ?? "nil")\n"
-                errorMsg += "Focus view must be a descendant of hostView; "
-                errorMsg += "key window will act as hostView if hostView is nil. "
-                errorMsg += "Check your focus view and hostView.\n"
-                fatalError(errorMsg)
-            }
-            #endif
-            if step.isValid && !illegal {
-                self.steps.append(step)
-            }
+        overlayView.onShadowChanged = { [weak self] in
+            self?.updateBuddyLayout()
         }
+
+        // A provider may not resolve until its screen has appeared. Keep the step
+        // and validate the resolved view immediately before displaying it.
+        self.steps = steps.filter { $0.focusViewProvider != nil || $0.buddyView != nil }
     }
-    
+
     // MARK: - Private Methods
-    
-    /// focusView must not be hostView itself, and must be descendant
-    /// of hostView. Otherwise, it is illegal.
-    private func isFocusViewIllegal(_ view: UIView?) -> Bool {
-        guard let view = view else {
-            return false
-        }
-        guard let host = overlayView.resolvedHostView() else {
-            return false
-        }
-        if view === host || !view.isDescendant(of: host) {
-            return true
-        }
-        return false
+
+    private func resolveHost(for focusView: UIView?) -> UIView? {
+        // An explicitly supplied host that has deallocated must not turn into an
+        // automatic request for some unrelated window.
+        if !usesAutomaticHost { return hostView }
+        if let focusView = focusView { return focusView.window }
+        return PolarisKeyWindowProvider.keyWindow()
     }
-    
-    /// Returns the currently displayed step.
+
+    private func canDisplay(_ step: GuideStep, in host: UIView) -> Bool {
+        return canDisplay(step, focusView: step.focusView, in: host)
+    }
+
+    private func canDisplay(_ step: GuideStep, focusView: UIView?, in host: UIView) -> Bool {
+        guard let focusView = focusView else { return step.buddyView != nil }
+        return focusView !== host && focusView.isDescendant(of: host)
+            && !focusView.isDescendant(of: containerView)
+            && focusView.window === ((host as? UIWindow) ?? host.window)
+    }
+
+    private func updateBuddyLayout() {
+        guard let step = currentStep(), let buddyView = step.buddyView else { return }
+        guard buddyView.superview === containerView,
+              let focusView = overlayView.validatedFocusView,
+              let shadowView = overlayView.shadowOfFocusView else {
+            buddyView.clearLayoutReference()
+            return
+        }
+        let guide = step.focusStyle.buddyLayoutGuide(for: focusView, shadowView: shadowView)
+        buddyView.updateLayout(referenceLayoutGuide: guide, focusView: focusView)
+    }
+
+    private func observeSceneDisconnect() {
+        if #available(iOS 13.0, *) {
+            sceneDisconnectObserver = NotificationCenter.default.addObserver(
+                forName: UIScene.didDisconnectNotification, object: nil, queue: .main
+            ) { [weak self] notification in
+                // An explicit host may enter a window after show(). Resolve only
+                // that host's current scene, never a global/key window.
+                guard let self = self, let host = self.presentationHostView,
+                      let scene = ((host as? UIWindow) ?? host.window)?.windowScene,
+                      notification.object as? UIScene === scene else { return }
+                self.hide()
+            }
+        }
+    }
+
+    /// Returns the currently displayed or preselected step.
     ///
-    /// - Returns: The step at `currentStepIndex`, or `nil` if no step is showing.
+    /// - Returns: The step at `currentStepIndex`, or `nil` if no step has been selected.
     public func currentStep() -> GuideStep? {
         guard currentStepIndex >= 0 && currentStepIndex < steps.count else {
             return nil
@@ -240,7 +275,7 @@ public final class GuideController: NSObject {
 
     private func makeContext(for step: GuideStep, index: Int) -> GuideStepContext {
         return GuideStepContext(
-            hostView: overlayView.resolvedHostView(),
+            hostView: presentationHostView,
             containerView: containerView,
             overlayView: overlayView,
             focusView: step.focusView,
@@ -252,8 +287,13 @@ public final class GuideController: NSObject {
 
     private func dispatch(_ event: GuideEvent, step: GuideStep, index: Int) {
         guard !plugins.isEmpty else { return }
+        let presentation = presentationID
+        let generation = stepChangeGeneration
         let context = makeContext(for: step, index: index)
         for plugin in plugins {
+            // A plugin may dismiss or advance synchronously. Do not deliver the
+            // old presentation/step's events after the resulting transition.
+            guard presentationID == presentation, stepChangeGeneration == generation else { break }
             plugin.handle(event, context: context)
         }
     }
@@ -263,6 +303,7 @@ public final class GuideController: NSObject {
         
         addOverlayToContainerIfNeeded()
         overlayView.setStep(step, animated: animatesStepTransition)
+        guard isShown(), currentStep() === step else { return }
         
         if let completer = step.completer {
             completer.onTrigger = { [weak self] _ in
@@ -270,6 +311,7 @@ public final class GuideController: NSObject {
                 self.performDismiss(reason: .completerTriggered)
             }
             completer.enable()
+            guard isShown(), currentStep() === step else { return }
         }
         
         if let buddyView = step.buddyView {
@@ -285,10 +327,7 @@ public final class GuideController: NSObject {
             
             addBuddyViewToContainer(buddyView)
             
-            if let focusView = step.focusView, let shadowView = overlayView.shadowOfFocusView {
-                let buddyLayoutGuide = step.focusStyle.buddyLayoutGuide(for: focusView, shadowView: shadowView)
-                buddyView.updateLayout(referenceLayoutGuide: buddyLayoutGuide, focusView: focusView)
-            }
+            updateBuddyLayout()
         }
     }
     
@@ -317,12 +356,11 @@ public final class GuideController: NSObject {
     }
     
     private func showNextStepOrComplete() {
-        let success = showNextStep()
-        if success {
-            onStepChange?(self)
-        }
-        if !success {
+        guard isShown(), !isDismissing, !isChangingStep else { return }
+        if currentStepIndex + 1 >= steps.count {
             performDismiss(reason: .completed)
+        } else if showNextStep() {
+            onStepChange?(self)
         }
     }
     
@@ -371,7 +409,7 @@ public final class GuideController: NSObject {
     /// - Returns: `true` if the item was added successfully; `false` if invalid or already present.
     @discardableResult
     public func addStep(_ step: GuideStep) -> Bool {
-        if !step.isValid {
+        if step.focusViewProvider == nil && step.buddyView == nil {
             return false
         }
         
@@ -404,130 +442,149 @@ public final class GuideController: NSObject {
     /// Displays the guide item at the specified index.
     ///
     /// If the index matches the current item, the mask is refreshed without changing items.
+    /// Before `show()`, this selects the starting item without attaching views or sending events.
     ///
     /// - Parameter index: The zero-based index of the item to display.
-    /// - Returns: `true` if the item was shown; `false` if the index is out of bounds.
+    /// - Returns: `true` if the item was selected or shown; `false` if the index or
+    ///            presentation hierarchy is invalid, or another transition is in progress.
     @discardableResult
     public func showStep(at index: Int) -> Bool {
-        if index < 0 || index >= steps.count {
-            return false
-        }
-        
-        if currentStepIndex == index {
-            if let step = currentStep() {
-                dispatch(.stepWillShow, step: step, index: index)
-                refreshOverlay(animated: false)
-                dispatch(.stepDidShow, step: step, index: index)
-            }
+        guard !isDismissing, !isChangingStep, steps.indices.contains(index) else { return false }
+        if !isShown() {
+            if presentationID != nil { hideInternal() }
+            currentStepIndex = index
             return true
         }
-        
-        let previousIndex = currentStepIndex
-        let previousStep = currentStep()
-        
-        if let previousStep = previousStep {
-            dispatch(.stepWillHide, step: previousStep, index: previousIndex)
-            previousStep.buddyView?.removeFromSuperview()
-            previousStep.completer?.disable()
-            dispatch(.stepDidHide, step: previousStep, index: previousIndex)
+        guard let host = presentationHostView,
+              canDisplay(steps[index], in: host), let presentation = presentationID else { return false }
+        isChangingStep = true
+        stepChangeGeneration &+= 1
+        defer { isChangingStep = false }
+
+        if currentStepIndex == index {
+            let step = steps[index]
+            dispatch(.stepWillShow, step: step, index: index)
+            guard presentationID == presentation, isShown() else { return false }
+            refreshOverlay(animated: false)
+            guard presentationID == presentation, isShown() else { return false }
+            isChangingStep = false
+            dispatch(.stepDidShow, step: step, index: index)
+            return presentationID == presentation && isShown()
         }
-        
+
+        let previousIndex = currentStepIndex
+        if let previousStep = currentStep() {
+            dispatch(.stepWillHide, step: previousStep, index: previousIndex)
+            guard presentationID == presentation, isShown() else { return false }
+            previousStep.buddyView?.removeFromSuperview()
+            previousStep.buddyView?.onAction = nil
+            previousStep.completer?.onTrigger = nil
+            previousStep.completer?.disable()
+            guard presentationID == presentation, isShown() else { return false }
+            dispatch(.stepDidHide, step: previousStep, index: previousIndex)
+            guard presentationID == presentation, isShown() else { return false }
+        }
+
         currentStepIndex = index
-        guard let step = currentStep() else { return false }
-        
+        let step = steps[index]
         dispatch(.stepWillShow, step: step, index: index)
+        guard presentationID == presentation, isShown() else { return false }
         configureCurrentStep()
+        guard presentationID == presentation, isShown() else { return false }
+        isChangingStep = false
         dispatch(.stepDidShow, step: step, index: index)
-        
-        return true
+        return presentationID == presentation && isShown()
     }
-    
+
     /// Displays the guide overlay and begins the guide sequence.
     ///
     /// If already showing, this method returns `true` without changes.
     /// The first guide item (or the current item if resuming) is displayed.
     ///
     /// - Parameter animated: Whether to animate the appearance of the guide overlay. Defaults to `false`.
-    /// - Returns: `true` if the guide was shown; `false` if there are no guide items.
+    /// - Returns: `true` if the guide was attached to its host; `false` if there are no
+    ///            guide items, the host is ambiguous or unavailable, or the focus does
+    ///            not belong to the host. An explicit host need not be in a window or
+    ///            an active scene. A presentation stays bound to its host.
     @discardableResult
     public func show(animated: Bool = false) -> Bool {
-        if steps.isEmpty {
-            return false
+        guard !isDismissing, !steps.isEmpty else { return false }
+        if isShown() { return true }
+        guard !isChangingStep else { return false }
+        if presentationID != nil || containerView.superview != nil || blockingGesture.view != nil {
+            hideInternal()
         }
-        
-        if isShown() {
-            return true
-        }
-        
-        guard let decidedHostView = overlayView.resolvedHostView() else {
-            return false
-        }
-        if containerView.superview != nil && containerView.superview != decidedHostView {
-            containerView.removeFromSuperview()
-        }
-        
-        if containerView.superview == nil {
-            decidedHostView.addSubview(containerView)
-            NSLayoutConstraint.activate([
-                containerView.leftAnchor.constraint(equalTo: decidedHostView.leftAnchor),
-                containerView.rightAnchor.constraint(equalTo: decidedHostView.rightAnchor),
-                containerView.topAnchor.constraint(equalTo: decidedHostView.topAnchor),
-                containerView.bottomAnchor.constraint(equalTo: decidedHostView.bottomAnchor)
-            ])
-            decidedHostView.layoutIfNeeded()
-        }
-        
-        // Add blocking gesture to hostView to intercept all touches
-        if blockingGesture.view == nil {
-            decidedHostView.addGestureRecognizer(blockingGesture)
-        }
-        blockingGesture.isEnabled = true
-        requireExternalGesturesToFail(in: decidedHostView)
-        
-        // Show the first step (or resume).
+
         let indexToShow = currentStepIndex < 0 ? 0 : currentStepIndex
         let stepToShow = steps[indexToShow]
+        let focusView = stepToShow.focusView
+        if usesAutomaticHost && stepToShow.focusViewProvider != nil && focusView == nil {
+            return false
+        }
+        guard let host = resolveHost(for: focusView),
+              canDisplay(stepToShow, focusView: focusView, in: host) else { return false }
+
+        let presentation = UUID()
+        presentationID = presentation
+        presentationHostView = host
+        currentStepIndex = -1
+        containerView.alpha = animated ? 0 : 1
+        host.addSubview(containerView)
+        guard presentationID == presentation, containerView.superview === host else { return false }
+        NSLayoutConstraint.activate([
+            containerView.leftAnchor.constraint(equalTo: host.leftAnchor),
+            containerView.rightAnchor.constraint(equalTo: host.rightAnchor),
+            containerView.topAnchor.constraint(equalTo: host.topAnchor),
+            containerView.bottomAnchor.constraint(equalTo: host.bottomAnchor)
+        ])
+        addOverlayToContainerIfNeeded()
+        overlayView.bind(to: host)
+        host.layoutIfNeeded()
+        guard presentationID == presentation, isShown() else { return false }
+        host.addGestureRecognizer(blockingGesture)
+        blockingGesture.isEnabled = true
+        observeSceneDisconnect()
+
         dispatch(.guideWillShow, step: stepToShow, index: indexToShow)
-        
+        guard presentationID == presentation, showStep(at: indexToShow) else {
+            if presentationID == presentation { hideInternal() }
+            return false
+        }
+
         if animated {
-            containerView.alpha = 0
-            showStep(at: indexToShow)
             UIView.animate(withDuration: animationDuration, delay: 0, options: .curveEaseOut, animations: {
                 self.containerView.alpha = 1
-            }, completion: { [weak self] _ in
-                guard let self = self, self.isShown(), let step = self.currentStep() else { return }
+            }, completion: { [weak self] finished in
+                guard let self = self, finished, self.presentationID == presentation,
+                      self.isShown(), let step = self.currentStep() else { return }
                 self.dispatch(.guideDidShow, step: step, index: self.currentStepIndex)
             })
-        } else {
-            showStep(at: indexToShow)
-            if let step = currentStep() {
-                dispatch(.guideDidShow, step: step, index: currentStepIndex)
-            }
+        } else if let step = currentStep() {
+            dispatch(.guideDidShow, step: step, index: currentStepIndex)
         }
-        
-        return true
+        return presentationID == presentation && isShown()
     }
-    
-    /// Checks whether the guide is currently visible.
+
+    /// Checks whether the guide is attached to its host, even if the host is offscreen.
     ///
     /// - Returns: `true` if the guide container is in the view hierarchy; `false` otherwise.
     public func isShown() -> Bool {
-        guard containerView.superview != nil else { return false }
-        guard let host = overlayView.resolvedHostView() else { return false }
+        guard presentationID != nil, let host = presentationHostView else { return false }
         return containerView.superview === host
     }
-    
+
     /// Hides the guide overlay and resets the current index.
     ///
     /// Calling this method triggers `onDismiss` with `.programmatic` reason.
     /// All guide views are removed from the hierarchy and the current index is reset.
     public func hide() {
-        guard isShown() else { return }
         performDismiss(reason: .programmatic)
     }
     
     /// Internal method to dismiss the guide with a specific reason.
     private func performDismiss(reason: GuideDismissReason) {
+        guard !isDismissing,
+              presentationID != nil || containerView.superview != nil || blockingGesture.view != nil else { return }
         let context = GuideDismissContext(
             reason: reason,
             step: currentStep(),
@@ -541,22 +598,34 @@ public final class GuideController: NSObject {
     
     /// Internal hide implementation without triggering callbacks.
     private func hideInternal() {
+        guard !isDismissing else { return }
+        isDismissing = true
+        defer { isDismissing = false }
+        if let observer = sceneDisconnectObserver {
+            NotificationCenter.default.removeObserver(observer)
+            sceneDisconnectObserver = nil
+        }
+        containerView.layer.removeAllAnimations()
         let activeIndex = currentStepIndex
-        let activeStep = currentStep()
+        let activeStep = presentationID != nil ? currentStep() : nil
         
         if let step = activeStep {
             dispatch(.stepWillHide, step: step, index: activeIndex)
             dispatch(.guideWillHide, step: step, index: activeIndex)
+            step.completer?.onTrigger = nil
             step.completer?.disable()
+            step.buddyView?.onAction = nil
         }
 
         blockingGesture.isEnabled = false
         blockingGesture.view?.removeGestureRecognizer(blockingGesture)
         
+        overlayView.setStep(nil, animated: false)
         while !containerView.subviews.isEmpty {
             containerView.subviews.last?.removeFromSuperview()
         }
         containerView.removeFromSuperview()
+        presentationID = nil
         
         if let step = activeStep {
             dispatch(.stepDidHide, step: step, index: activeIndex)
@@ -564,30 +633,8 @@ public final class GuideController: NSObject {
         }
         
         currentStepIndex = -1
-    }
-}
-
-extension GuideController {
-    private func requireExternalGesturesToFail(in targetView: UIView) {
-        for view in gestureRequirementViews(from: targetView) {
-            guard let gestures = view.gestureRecognizers else { continue }
-            for gesture in gestures {
-                if gesture === blockingGesture { continue }
-                guard let gestureView = gesture.view else { continue }
-                if isInternalGestureView(gestureView) { continue }
-                gesture.require(toFail: blockingGesture)
-            }
-        }
-    }
-
-    private func gestureRequirementViews(from targetView: UIView) -> [UIView] {
-        var hosts: [UIView] = []
-        var current: UIView? = targetView
-        while let view = current {
-            hosts.append(view)
-            current = view.superview
-        }
-        return hosts
+        overlayView.bind(to: nil)
+        presentationHostView = nil
     }
 }
 
@@ -606,7 +653,7 @@ extension GuideController: UIGestureRecognizerDelegate {
         }
         
         // focusView or its subviews
-        if let focusView = currentStep()?.focusView,
+        if let focusView = overlayView.validatedFocusView,
            (view === focusView || view.isDescendant(of: focusView)) {
             return true
         }
