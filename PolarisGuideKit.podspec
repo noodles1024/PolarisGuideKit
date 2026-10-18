@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name = "PolarisGuideKit"
-  s.version = "1.1.0"
+  s.version = "1.1.1"
   s.summary = "iOS Onboarding guide components with focus highlighting and step orchestration."
   s.description = <<-DESC
 PolarisGuideKit provides a step-based onboarding guide with focus highlighting,
