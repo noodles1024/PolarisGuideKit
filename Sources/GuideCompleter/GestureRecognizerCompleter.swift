@@ -26,6 +26,10 @@ public final class GestureRecognizerCompleter: GuideAutoCompleter {
     
     /// Creates a completer that monitors a gesture recognizer on a view.
     ///
+    /// The completer manages the recognizer's attachment and enabled state. When
+    /// released, it removes its own target-action pair and detaches the recognizer
+    /// from its current view, preserving any other target-action pairs.
+    ///
     /// - Parameters:
     ///   - view: The view to attach the gesture recognizer to.
     ///   - gestureRecognizer: The gesture recognizer to use. Defaults to `UITapGestureRecognizer()`.
@@ -39,6 +43,11 @@ public final class GestureRecognizerCompleter: GuideAutoCompleter {
         gestureRecognizer.addTarget(self, action: #selector(handleGesture(_:)))
         view.addGestureRecognizer(gestureRecognizer)
         gestureRecognizer.isEnabled = false
+    }
+
+    deinit {
+        gestureRecognizer.removeTarget(self, action: #selector(handleGesture(_:)))
+        gestureRecognizer.view?.removeGestureRecognizer(gestureRecognizer)
     }
     
     // MARK: - Actions

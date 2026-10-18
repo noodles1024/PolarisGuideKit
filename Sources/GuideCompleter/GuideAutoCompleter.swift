@@ -68,6 +68,8 @@ open class GuideAutoCompleter {
     ///
     /// Subclasses must override this method to clean up event listeners or timers.
     /// Do not call `super.disable()` in your override.
+    /// Cleanup must be idempotent and must not access the controller or invoke
+    /// application callbacks: it may also run while the controller is deinitializing.
     ///
     /// - Important: This method must be overridden. In debug builds, failing to override
     ///              will trigger a fatal error.

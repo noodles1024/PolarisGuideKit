@@ -49,6 +49,12 @@ public final class AudioGuidePlugin: GuidePlugin {
     public init() {}
 
     deinit {
+        tearDown()
+    }
+
+    /// Stops playback and removes observers without notifying the buddy view.
+    public func tearDown() {
+        playbackRequestID = UUID()
         stopPlayback(didPlayToEnd: false, notifyStop: false)
     }
 

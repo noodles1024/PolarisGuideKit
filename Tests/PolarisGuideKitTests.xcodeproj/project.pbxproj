@@ -13,6 +13,7 @@
 		C09B3B66CF8AB4AC2C0E96EB /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BBEAA6D7A0C3F5B6433591AF /* Foundation.framework */; };
 		E5E4B09D18AA54BC8DAF104F /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBA38C969AD72DFE5F8723A2 /* SceneDelegate.swift */; };
 		E8B6B5CC8F653802F09FAEC1 /* GuideControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71883564C39EC338CFF4B2C6 /* GuideControllerTests.swift */; };
+		E9F63C84107A426B99F4206A /* GestureRecognizerCompleterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C05C868C1B844078836FC4D /* GestureRecognizerCompleterTests.swift */; };
 		ECA97D7B909733161EE684DC /* GuideOverlayViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FC2CF629F3AC3F16EDCDD48 /* GuideOverlayViewTests.swift */; };
 		EE039B517DE32C1AEFBE6F14 /* AudioGuidePluginTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B02818BBEC0ED6AED773AD0B /* AudioGuidePluginTests.swift */; };
 		FC8084FB94E5D84C10A524F1 /* PolarisKeyWindowProviderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4700CEE5C37542F290A688A /* PolarisKeyWindowProviderTests.swift */; };
@@ -29,6 +30,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		2C05C868C1B844078836FC4D /* GestureRecognizerCompleterTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GestureRecognizerCompleterTests.swift; sourceTree = "<group>"; };
 		2DCD6EC94EF15DB92989B9AC /* AppDelegate.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		4B0DF86CF03B25397A2EE055 /* PolarisGuideKitTestHost.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PolarisGuideKitTestHost.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		71883564C39EC338CFF4B2C6 /* GuideControllerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GuideControllerTests.swift; sourceTree = "<group>"; };
@@ -83,6 +85,7 @@
 			isa = PBXGroup;
 			children = (
 				B02818BBEC0ED6AED773AD0B /* AudioGuidePluginTests.swift */,
+				2C05C868C1B844078836FC4D /* GestureRecognizerCompleterTests.swift */,
 				71883564C39EC338CFF4B2C6 /* GuideControllerTests.swift */,
 				8FC2CF629F3AC3F16EDCDD48 /* GuideOverlayViewTests.swift */,
 				E4700CEE5C37542F290A688A /* PolarisKeyWindowProviderTests.swift */,
@@ -227,6 +230,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				EE039B517DE32C1AEFBE6F14 /* AudioGuidePluginTests.swift in Sources */,
+				E9F63C84107A426B99F4206A /* GestureRecognizerCompleterTests.swift in Sources */,
 				E8B6B5CC8F653802F09FAEC1 /* GuideControllerTests.swift in Sources */,
 				ECA97D7B909733161EE684DC /* GuideOverlayViewTests.swift in Sources */,
 				FC8084FB94E5D84C10A524F1 /* PolarisKeyWindowProviderTests.swift in Sources */,

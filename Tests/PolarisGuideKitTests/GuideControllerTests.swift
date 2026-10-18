@@ -353,6 +353,99 @@ final class GuideControllerTests: XCTestCase {
         }
     }
 
+    func testReleasingShownGuideUsesResourceCleanupWithoutCallingBackIntoController() {
+        let host = UIView(frame: CGRect(x: 0, y: 0, width: 320, height: 480))
+        let step = makeStep(in: host)
+        let focus = step.focusView
+        let buddy = GuideBuddyView()
+        let completer = CleanupCompleter()
+        let plugin = CleanupPlugin()
+        step.buddyView = buddy
+        step.completer = completer
+        weak var released: GuideController?
+
+        autoreleasepool {
+            let guide = GuideController(hostView: host, steps: [step], plugins: [plugin])
+            released = guide
+            // These unowned accesses would trap if deinit dispatched lifecycle events
+            // or evaluated the focus provider to construct a plugin context.
+            plugin.onEvent = { [unowned guide] _ in _ = guide.currentStepIndex }
+            guide.onDismiss = { _, _ in XCTFail("Deinit must not invoke onDismiss") }
+            XCTAssertTrue(guide.show())
+            XCTAssertNotNil(buddy.contentReferenceLayoutGuide)
+            step.focusViewProvider = { [unowned guide, weak focus] in
+                _ = guide.currentStepIndex
+                return focus
+            }
+        }
+
+        XCTAssertNil(released)
+        XCTAssertEqual(plugin.events, ["guideWillShow", "stepWillShow", "stepDidShow", "guideDidShow"])
+        XCTAssertEqual(plugin.tearDownCount, 1)
+        XCTAssertFalse(plugin.hasResources)
+        XCTAssertEqual(completer.disableCount, 1)
+        XCTAssertNil(completer.onTrigger)
+        XCTAssertNil(buddy.onAction)
+        XCTAssertNil(buddy.contentReferenceLayoutGuide)
+        XCTAssertNil(buddy.superview)
+        XCTAssertNil(container(in: host))
+        XCTAssertTrue(blockers(in: host).isEmpty)
+    }
+
+    func testReleasingUnshownOrPreselectedGuideDoesNotTearDownPlugins() {
+        let host = UIView()
+        for preselect in [false, true] {
+            let plugin = CleanupPlugin()
+            weak var released: GuideController?
+            autoreleasepool {
+                let guide = GuideController(hostView: host, steps: [makeStep(in: host)], plugins: [plugin])
+                released = guide
+                if preselect { XCTAssertTrue(guide.showStep(at: 0)) }
+            }
+            XCTAssertNil(released)
+            XCTAssertTrue(plugin.events.isEmpty)
+            XCTAssertEqual(plugin.tearDownCount, 0)
+        }
+    }
+
+    func testExplicitHideKeepsLifecycleEventsWithoutRepeatingCleanupAtDeinit() {
+        let host = UIView()
+        let plugin = CleanupPlugin()
+        var dismissCount = 0
+        weak var released: GuideController?
+        autoreleasepool {
+            let guide = GuideController(hostView: host, steps: [makeStep(in: host)], plugins: [plugin])
+            released = guide
+            guide.onDismiss = { _, _ in dismissCount += 1 }
+            XCTAssertTrue(guide.show())
+            plugin.events.removeAll()
+            guide.hide()
+            guide.hide()
+            XCTAssertEqual(plugin.events, ["stepWillHide", "guideWillHide", "stepDidHide", "guideDidHide"])
+        }
+        XCTAssertNil(released)
+        XCTAssertEqual(dismissCount, 1)
+        XCTAssertEqual(plugin.tearDownCount, 0)
+        XCTAssertFalse(plugin.hasResources)
+    }
+
+    func testReleasingGuideStillTearsDownPluginsAfterHostHasDeallocated() {
+        let plugin = CleanupPlugin()
+        var guide: GuideController?
+        weak var releasedHost: UIView?
+        autoreleasepool {
+            let host = UIView()
+            releasedHost = host
+            guide = GuideController(hostView: host, steps: [makeStep(in: host)], plugins: [plugin])
+            XCTAssertTrue(guide!.show())
+        }
+        XCTAssertNil(releasedHost)
+        XCTAssertFalse(guide!.isShown())
+        guide = nil
+        XCTAssertEqual(plugin.tearDownCount, 1)
+        XCTAssertFalse(plugin.hasResources)
+    }
+
     func testShowIsIdempotentInsideStepCallbacks() {
         let host = UIView()
         let plugin = CallbackPlugin()
@@ -582,6 +675,34 @@ private final class ImmediateCompleter: GuideAutoCompleter {
 private final class CallbackPlugin: GuidePlugin {
     var onEvent: ((GuideEvent) -> Void)?
     func handle(_ event: GuideEvent, context: GuideStepContext) { onEvent?(event) }
+}
+
+private final class CleanupPlugin: GuidePlugin {
+    var events: [String] = []
+    var tearDownCount = 0
+    var hasResources = false
+    var onEvent: ((GuideEvent) -> Void)?
+
+    func handle(_ event: GuideEvent, context: GuideStepContext) {
+        events.append(String(describing: event))
+        if case .stepDidShow = event { hasResources = true }
+        if case .guideDidHide = event { hasResources = false }
+        onEvent?(event)
+    }
+
+    func tearDown() {
+        tearDownCount += 1
+        hasResources = false
+    }
+}
+
+private final class CleanupCompleter: GuideAutoCompleter {
+    var disableCount = 0
+    override func enable() {}
+    override func disable() {
+        XCTAssertNil(onTrigger)
+        disableCount += 1
+    }
 }
 
 private final class CallbackHost: UIView {

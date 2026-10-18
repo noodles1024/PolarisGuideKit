@@ -187,6 +187,65 @@ final class AudioGuidePluginTests: XCTestCase {
         XCTAssertEqual(firstBuddy.stopEvents, [false])
     }
 
+    func testReleasingGuideStopsRetainedAudioPluginWithoutBuddyCallbacks() throws {
+        let host = UIView()
+        let plugin = AudioGuidePlugin()
+        let player = try audioPlayer(in: plugin)
+        let buddy = AudioBuddyView()
+        let step = context(buddy: buddy).step
+        weak var released: GuideController?
+
+        try autoreleasepool {
+            let guide = GuideController(hostView: host, steps: [step], plugins: [plugin])
+            released = guide
+            buddy.onStop = { [unowned guide] _ in
+                _ = guide.currentStepIndex
+                XCTFail("Deinit must not send audio stop callbacks")
+            }
+            buddy.onFail = { [unowned guide] _ in
+                _ = guide.currentStepIndex
+                XCTFail("Queued audio callbacks must be invalidated during deinit")
+            }
+            XCTAssertTrue(guide.show())
+            let item = try XCTUnwrap(player.currentItem)
+            NotificationCenter.default.post(name: .AVPlayerItemDidPlayToEndTime, object: item)
+            NotificationCenter.default.post(
+                name: .AVPlayerItemFailedToPlayToEndTime,
+                object: item,
+                userInfo: [AVPlayerItemFailedToPlayToEndTimeErrorKey: NSError(domain: "OldItem", code: 1)]
+            )
+        }
+
+        XCTAssertNil(released)
+        XCTAssertNil(player.currentItem)
+        XCTAssertEqual(player.rate, 0)
+        drainMainQueue()
+        XCTAssertEqual(buddy.startCount, 1)
+        XCTAssertTrue(buddy.stopEvents.isEmpty)
+        XCTAssertEqual(buddy.failureCount, 0)
+    }
+
+    func testAudioTeardownIsIdempotentAndPluginCanBeReused() throws {
+        let plugin = AudioGuidePlugin()
+        let player = try audioPlayer(in: plugin)
+        let firstBuddy = AudioBuddyView()
+        plugin.handle(.stepDidShow, context: context(buddy: firstBuddy))
+        XCTAssertNotNil(player.currentItem)
+        plugin.tearDown()
+        plugin.tearDown()
+        XCTAssertNil(player.currentItem)
+        XCTAssertTrue(firstBuddy.stopEvents.isEmpty)
+
+        let nextBuddy = AudioBuddyView()
+        let nextContext = context(buddy: nextBuddy)
+        plugin.handle(.stepDidShow, context: nextContext)
+        XCTAssertNotNil(player.currentItem)
+        XCTAssertEqual(nextBuddy.startCount, 1)
+        plugin.handle(.guideWillHide, context: nextContext)
+        XCTAssertNil(player.currentItem)
+        XCTAssertEqual(nextBuddy.stopEvents, [false])
+    }
+
     private func audioPlayer(in plugin: AudioGuidePlugin) throws -> AVPlayer {
         try XCTUnwrap(Mirror(reflecting: plugin).children.first {
             $0.label == "audioPlayer"

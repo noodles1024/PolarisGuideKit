@@ -365,10 +365,10 @@ public final class GuideController: NSObject {
     }
     
     deinit {
-        // Ensure blocking gesture is removed even if hideInternal() fails for some reason
-        blockingGesture.view?.removeGestureRecognizer(blockingGesture)
-        // Use hideInternal() to avoid triggering callbacks during deallocation
-        hideInternal()
+        overlayView.onOutsideTap = nil
+        overlayView.onShadowChanged = nil
+        // Release plugin resources without calling lifecycle handlers on a dying owner.
+        hideInternal(dispatchesEvents: false)
     }
     
     // MARK: - Public Methods
@@ -596,8 +596,8 @@ public final class GuideController: NSObject {
         onDismiss?(self, context)
     }
     
-    /// Internal hide implementation without triggering callbacks.
-    private func hideInternal() {
+    /// Cleans up without invoking onDismiss. Deinitialization uses resource-only plugin teardown.
+    private func hideInternal(dispatchesEvents: Bool = true) {
         guard !isDismissing else { return }
         isDismissing = true
         defer { isDismissing = false }
@@ -607,27 +607,37 @@ public final class GuideController: NSObject {
         }
         containerView.layer.removeAllAnimations()
         let activeIndex = currentStepIndex
-        let activeStep = presentationID != nil ? currentStep() : nil
+        let hadPresentation = presentationID != nil
+        let activeStep = hadPresentation ? currentStep() : nil
         
         if let step = activeStep {
-            dispatch(.stepWillHide, step: step, index: activeIndex)
-            dispatch(.guideWillHide, step: step, index: activeIndex)
+            if dispatchesEvents {
+                dispatch(.stepWillHide, step: step, index: activeIndex)
+                dispatch(.guideWillHide, step: step, index: activeIndex)
+            }
             step.completer?.onTrigger = nil
-            step.completer?.disable()
             step.buddyView?.onAction = nil
+            step.completer?.disable()
+        }
+
+        if !dispatchesEvents && hadPresentation {
+            for plugin in plugins {
+                plugin.tearDown()
+            }
         }
 
         blockingGesture.isEnabled = false
         blockingGesture.view?.removeGestureRecognizer(blockingGesture)
         
         overlayView.setStep(nil, animated: false)
+        activeStep?.buddyView?.clearLayoutReference()
         while !containerView.subviews.isEmpty {
             containerView.subviews.last?.removeFromSuperview()
         }
         containerView.removeFromSuperview()
         presentationID = nil
         
-        if let step = activeStep {
+        if dispatchesEvents, let step = activeStep {
             dispatch(.stepDidHide, step: step, index: activeIndex)
             dispatch(.guideDidHide, step: step, index: activeIndex)
         }
