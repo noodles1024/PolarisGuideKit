@@ -94,6 +94,8 @@ public final class GuideStep {
     /// GuideController installs a blocking gesture to prevent external gestures (like scroll views
     /// or navigation swipes) from interfering. Add gesture recognizers here to allow them to work
     /// alongside the guide overlay.
+    /// - Note: The current step's whitelist is evaluated at the start of each touch
+    ///         sequence. Changes apply to the next gesture, including after a step transition.
     public var gestureRecognizerWhitelist: [UIGestureRecognizer] = []
     
     /// Visual style applied to the focus area.

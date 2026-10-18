@@ -272,6 +272,10 @@ flowchart TB
 - 确保手势已加入 `step.gestureRecognizerWhitelist`
 - 如果手势挂在 tableView/collectionView 上，仍需要白名单放行
 
+每次新的触摸序列开始时，都会使用当前步骤的白名单。可以在第一步阻断某个手势、第二步放行、第三步再次阻断；放行一个手势不会同时放开导航侧滑返回或其他外部手势。隐藏或释放引导时会移除其拦截器，不修改外部手势原有的 delegate 或启用状态。
+
+“多步骤引导”示例提供纵向手势计数器：验证计数只在第二步增长、整个引导期间不能侧滑返回，并在完成或跳过引导后确认侧滑返回恢复。
+
 ### 多 window / 多 scene 场景
 
 根据引导的覆盖范围显式传入 `view`、`navigationController.view` 或业务窗口。可以在 `viewDidLoad` 中创建并持有 controller，此时不要求 `focusView.window` 非空。只有需要覆盖整个窗口且准备从焦点获取窗口时，才需要等待 `focusView.window` 可用。

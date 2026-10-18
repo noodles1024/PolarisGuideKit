@@ -38,6 +38,10 @@ final class SimpleBuddyView: GuideBuddyView {
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
+
+    func updateMessage(_ message: String) {
+        messageLabel.text = message
+    }
     
     // MARK: - Setup
     

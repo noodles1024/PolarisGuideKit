@@ -387,32 +387,36 @@ enum DemoStrings {
             isChinese ? "跳过按钮可提前退出引导" : "Skip button to exit the guide early"
         }
         static var feature3: String {
-            isChinese ? "平滑的过渡动画" : "Smooth transition animations"
+            isChinese ? "外部纵向手势仅在第二步加入白名单" : "External vertical pan is whitelisted only in step 2"
         }
         
         static var tipLabel: String {
-            isChinese ? "点击「下一步」继续或「跳过」退出。" : "Tap 'Next' to proceed or 'Skip' to exit."
+            isChinese ? "在屏幕中部上下滑动，观察计数。完成或跳过后，左边缘侧滑应正常返回。" : "Swipe vertically near the screen center to check the count. After finishing or skipping, swipe from the left edge to go back."
+        }
+
+        static func panCount(_ count: Int) -> String {
+            isChinese ? "纵向手势识别次数：\(count)" : "Vertical pans recognized: \(count)"
         }
         
         static var step1of3Title: String {
             isChinese ? "第 1 步，共 3 步" : "Step 1 of 3"
         }
         static var step1Message: String {
-            isChinese ? "欢迎使用引导！\n\n这是第一步，使用圆角矩形高亮样式。" : "Welcome to the guide!\n\nThis is the first step with a rounded rect highlight style."
+            isChinese ? "纵向手势已禁止：在屏幕中部上下滑动，计数应保持不变。\n\n此时从左边缘右滑也不能返回。" : "Vertical pan is blocked: swipe up or down near the screen center. The count should stay unchanged.\n\nSwiping from the left edge must also stay blocked."
         }
         
         static var step2of3Title: String {
             isChinese ? "第 2 步，共 3 步" : "Step 2 of 3"
         }
         static var step2Message: String {
-            isChinese ? "进展顺利！\n\n注意步骤之间的平滑动画。" : "Great progress!\n\nNotice the smooth animation between steps."
+            isChinese ? "纵向手势已加入白名单：在屏幕中部上下滑动，每次应增加计数。\n\n左边缘侧滑返回仍被禁止。" : "Vertical pan is whitelisted: swipe up or down near the screen center. Each pan should increase the count.\n\nSwiping from the left edge must still stay blocked."
         }
         
         static var step3of3Title: String {
             isChinese ? "第 3 步，共 3 步" : "Step 3 of 3"
         }
         static var step3Message: String {
-            isChinese ? "即将完成！\n\n点击「下一步」完成或「跳过」退出。" : "Almost done!\n\nTap 'Next' to complete or 'Skip' to exit."
+            isChinese ? "纵向手势再次禁止：上下滑动时，计数应停止增长。左边缘侧滑仍不能返回。\n\n点击「下一步」完成后，侧滑返回应恢复。" : "Vertical pan is blocked again: the count should stop increasing. Swiping from the left edge must remain blocked.\n\nTap 'Next' to finish, then check that swiping back works."
         }
     }
 

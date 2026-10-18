@@ -13,11 +13,19 @@ import PolarisGuideKit
 /// - RoundedRectFocusStyle for all steps
 /// - Skip button functionality
 /// - Step change animations
+/// - A gesture whitelist that changes between steps
 final class MultiStepGuideDemoVC: UIViewController {
     
     // MARK: - Properties
     
     private var guideController: GuideController?
+    private var recognizedPanCount = 0
+    private lazy var demoPanGesture: UIPanGestureRecognizer = {
+        let gesture = UIPanGestureRecognizer(target: self, action: #selector(demoPanRecognized(_:)))
+        gesture.cancelsTouchesInView = false
+        gesture.delegate = self
+        return gesture
+    }()
     
     // Modern color palette
     private let primaryColor = UIColor(red: 0.36, green: 0.42, blue: 0.98, alpha: 1.0)    // Indigo blue
@@ -110,6 +118,7 @@ final class MultiStepGuideDemoVC: UIViewController {
         label.font = .systemFont(ofSize: 14, weight: .medium)
         label.textColor = ctaColor
         label.textAlignment = .center
+        label.numberOfLines = 0
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
     }()
@@ -139,8 +148,17 @@ final class MultiStepGuideDemoVC: UIViewController {
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        // Attach outside the guide/focus subtree so the whitelist is required.
+        (navigationController?.view ?? view).addGestureRecognizer(demoPanGesture)
         updateTexts()
         refreshFeatureItems()
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        demoPanGesture.view?.removeGestureRecognizer(demoPanGesture)
+        guideController?.hide()
+        guideController = nil
     }
     
     // MARK: - Setup
@@ -150,7 +168,7 @@ final class MultiStepGuideDemoVC: UIViewController {
         button2.setTitle(DemoStrings.MultiStep.step2, for: .normal)
         button3.setTitle(DemoStrings.MultiStep.step3, for: .normal)
         cardTitleLabel.text = DemoStrings.MultiStep.aboutThisDemo
-        tipLabel.text = DemoStrings.MultiStep.tipLabel
+        updatePanCount()
         startGuideButton.setTitle(DemoStrings.Common.startGuide, for: .normal)
     }
     
@@ -257,8 +275,26 @@ final class MultiStepGuideDemoVC: UIViewController {
     }
     
     // MARK: - Actions
+
+    @objc private func demoPanRecognized(_ gesture: UIPanGestureRecognizer) {
+        guard gesture.state == .began else { return }
+        recognizedPanCount += 1
+        updatePanCount()
+    }
+
+    private func updatePanCount() {
+        let countText = DemoStrings.MultiStep.panCount(recognizedPanCount)
+        tipLabel.text = "\(DemoStrings.MultiStep.tipLabel)\n\(countText)"
+        guard let controller = guideController,
+              let buddy = controller.currentStep()?.buddyView as? SimpleBuddyView else { return }
+        let messages = [DemoStrings.MultiStep.step1Message,
+                        DemoStrings.MultiStep.step2Message,
+                        DemoStrings.MultiStep.step3Message]
+        buddy.updateMessage("\(messages[controller.currentStepIndex])\n\n\(countText)")
+    }
     
     @objc private func startGuideTapped() {
+        recognizedPanCount = 0
         // Unified RoundedRectFocusStyle: cornerRadius = original + 2, insets = -4 (expand outward)
         let unifiedFocusStyle = RoundedRectFocusStyle(
             focusCornerRadius: .followFocusView(delta: 2),
@@ -271,7 +307,7 @@ final class MultiStepGuideDemoVC: UIViewController {
         step1.focusStyle = unifiedFocusStyle
         step1.buddyView = SimpleBuddyView(
             title: DemoStrings.MultiStep.step1of3Title,
-            message: DemoStrings.MultiStep.step1Message,
+            message: "\(DemoStrings.MultiStep.step1Message)\n\n\(DemoStrings.MultiStep.panCount(recognizedPanCount))",
             showNextButton: true,
             showSkipButton: true
         )
@@ -280,6 +316,7 @@ final class MultiStepGuideDemoVC: UIViewController {
         let step2 = GuideStep()
         step2.focusView = button2
         step2.focusStyle = unifiedFocusStyle
+        step2.gestureRecognizerWhitelist = [demoPanGesture]
         step2.buddyView = SimpleBuddyView(
             title: DemoStrings.MultiStep.step2of3Title,
             message: DemoStrings.MultiStep.step2Message,
@@ -301,7 +338,8 @@ final class MultiStepGuideDemoVC: UIViewController {
         let controller = GuideController(hostView: navigationController?.view ?? view, steps: [step1, step2, step3])
         controller.animatesStepTransition = true
         
-        controller.onStepChange = { controller in
+        controller.onStepChange = { [weak self] controller in
+            self?.updatePanCount()
             print("📍 Step changed to index: \(controller.currentStepIndex)")
         }
         
@@ -319,9 +357,19 @@ final class MultiStepGuideDemoVC: UIViewController {
                 print("🔧 Guide dismissed programmatically")
             }
             self?.guideController = nil
+            self?.updatePanCount()
         }
         
         _ = controller.show(animated: true)
         guideController = controller
+        updatePanCount()
+    }
+}
+
+extension MultiStepGuideDemoVC: UIGestureRecognizerDelegate {
+    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        let velocity = demoPanGesture.velocity(in: demoPanGesture.view)
+        // Leave horizontal navigation swipes available after the guide ends.
+        return abs(velocity.y) > abs(velocity.x)
     }
 }

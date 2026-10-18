@@ -15,6 +15,7 @@ import UIKit
 /// This container ensures a clear background and provides a layout callback hook.
 /// The background color is always forced to clear, even if explicitly set otherwise.
 final class GuideContainerView: UIView {
+    var onHierarchyOrLayoutChanged: (() -> Void)?
     
     // MARK: - Initialization
     
@@ -34,6 +35,16 @@ final class GuideContainerView: UIView {
     }
     
     // MARK: - Overrides
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        onHierarchyOrLayoutChanged?()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        onHierarchyOrLayoutChanged?()
+    }
     
     override var backgroundColor: UIColor? {
         get {

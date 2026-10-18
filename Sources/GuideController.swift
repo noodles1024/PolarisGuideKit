@@ -160,6 +160,8 @@ public final class GuideController: NSObject {
     /// A gesture recognizer that blocks external gestures while the guide is displayed.
     /// Added to hostView to intercept all touches including those in focusView area.
     private let blockingGesture = BlockAllGestureRecognizer(target: nil, action: nil)
+    private var gestureGates: [ObjectIdentifier: GuideGestureGate] = [:]
+    private var isSynchronizingGestureGates = false
     
     @objc private func handleBlockingGesture(_ gesture: UIGestureRecognizer) {
         // Empty implementation - the gesture just needs to be recognized to block others.
@@ -208,6 +210,10 @@ public final class GuideController: NSObject {
         
         overlayView.onShadowChanged = { [weak self] in
             self?.updateBuddyLayout()
+            self?.synchronizeGestureGates()
+        }
+        containerView.onHierarchyOrLayoutChanged = { [weak self] in
+            self?.synchronizeGestureGates()
         }
 
         // A provider may not resolve until its screen has appeared. Keep the step
@@ -246,6 +252,58 @@ public final class GuideController: NSObject {
         }
         let guide = step.focusStyle.buddyLayoutGuide(for: focusView, shadowView: shadowView)
         buddyView.updateLayout(referenceLayoutGuide: guide, focusView: focusView)
+    }
+
+    private func synchronizeGestureGates() {
+        guard !isDismissing, !isSynchronizingGestureGates, isShown(),
+              blockingGesture.view != nil, let host = presentationHostView else { return }
+        let presentation = presentationID
+        isSynchronizingGestureGates = true
+        defer { isSynchronizingGestureGates = false }
+
+        var visited = Set<ObjectIdentifier>()
+        var gestures: [ObjectIdentifier: UIGestureRecognizer] = [:]
+        // Forwarded focus touches may traverse a navigation/scroll container
+        // below a window host, so the host's ancestor chain alone is not enough.
+        for start in [host, overlayView.validatedFocusView].compactMap({ $0 }) {
+            var ancestor: UIView? = start
+            while let view = ancestor, visited.insert(ObjectIdentifier(view)).inserted {
+                for gesture in view.gestureRecognizers ?? [] {
+                    if isGuideBlockingGesture(gesture) { continue }
+                    gestures[ObjectIdentifier(gesture)] = gesture
+                }
+                ancestor = view.superview
+            }
+        }
+
+        guard presentationID == presentation, isShown(), !isDismissing else { return }
+        for (id, gate) in gestureGates {
+            if gate.guardedGesture == nil {
+                gate.invalidate()
+                gestureGates.removeValue(forKey: id)
+            } else {
+                // Keep the dependency reusable if a dynamic focus moves back.
+                // Detached/unrelated gestures must not wait on this guide.
+                let isRelevant = gestures[id] != nil
+                if gate.isEnabled != isRelevant { gate.isEnabled = isRelevant }
+            }
+        }
+        for (id, gesture) in gestures where gestureGates[id] == nil {
+            guard presentationID == presentation, isShown(), !isDismissing else { return }
+            let gate = GuideGestureGate(guarding: gesture) { [weak self] gesture in
+                guard let self = self, self.isShown(), !self.isDismissing,
+                      let view = gesture.view else { return false }
+                return !self.isInternalGestureView(view) && !self.isWhitelistedGesture(gesture)
+            }
+            gestureGates[id] = gate
+            host.addGestureRecognizer(gate)
+            // Navigation gestures can win arbitration when failure requirements
+            // are supplied only by the shared blocker's delegate.
+            // Install even for currently whitelisted gestures. The gate fails
+            // for allowed touches and begins for blocked ones, so changing steps
+            // never requires removing an irreversible failure relationship.
+            gesture.require(toFail: gate)
+        }
     }
 
     private func observeSceneDisconnect() {
@@ -367,6 +425,7 @@ public final class GuideController: NSObject {
     deinit {
         overlayView.onOutsideTap = nil
         overlayView.onShadowChanged = nil
+        containerView.onHierarchyOrLayoutChanged = nil
         // Release plugin resources without calling lifecycle handlers on a dying owner.
         hideInternal(dispatchesEvents: false)
     }
@@ -399,6 +458,7 @@ public final class GuideController: NSObject {
     /// - Parameter animated: Whether to animate the mask transition. Defaults to `false`.
     public func refreshOverlay(animated: Bool = false) {
         overlayView.refreshMask(animated: animated)
+        synchronizeGestureGates()
     }
     
     /// Adds a guide item to the sequence.
@@ -491,6 +551,7 @@ public final class GuideController: NSObject {
         guard presentationID == presentation, isShown() else { return false }
         configureCurrentStep()
         guard presentationID == presentation, isShown() else { return false }
+        synchronizeGestureGates()
         isChangingStep = false
         dispatch(.stepDidShow, step: step, index: index)
         return presentationID == presentation && isShown()
@@ -543,6 +604,7 @@ public final class GuideController: NSObject {
         guard presentationID == presentation, isShown() else { return false }
         host.addGestureRecognizer(blockingGesture)
         blockingGesture.isEnabled = true
+        synchronizeGestureGates()
         observeSceneDisconnect()
 
         dispatch(.guideWillShow, step: stepToShow, index: indexToShow)
@@ -628,6 +690,8 @@ public final class GuideController: NSObject {
 
         blockingGesture.isEnabled = false
         blockingGesture.view?.removeGestureRecognizer(blockingGesture)
+        gestureGates.values.forEach { $0.invalidate() }
+        gestureGates.removeAll()
         
         overlayView.setStep(nil, animated: false)
         activeStep?.buddyView?.clearLayoutReference()
@@ -651,6 +715,10 @@ public final class GuideController: NSObject {
 // MARK: - UIGestureRecognizerDelegate
 
 extension GuideController: UIGestureRecognizerDelegate {
+
+    private func isGuideBlockingGesture(_ gesture: UIGestureRecognizer) -> Bool {
+        return gesture is BlockAllGestureRecognizer || gesture is GuideGestureGate
+    }
     
     /// Checks if the given view belongs to internal guide components (containerView or focusView).
     ///
@@ -681,6 +749,7 @@ extension GuideController: UIGestureRecognizerDelegate {
         shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
     ) -> Bool {
         guard gestureRecognizer === blockingGesture else { return false }
+        if isGuideBlockingGesture(otherGestureRecognizer) { return true }
         guard isShown() else { return true }  // Safety: don't interfere if not shown
         guard let otherView = otherGestureRecognizer.view else { return false }
         
@@ -693,6 +762,7 @@ extension GuideController: UIGestureRecognizerDelegate {
         shouldRequireFailureOf otherGestureRecognizer: UIGestureRecognizer
     ) -> Bool {
         guard gestureRecognizer === blockingGesture else { return false }
+        if isGuideBlockingGesture(otherGestureRecognizer) { return false }
         guard isShown() else { return false }  // Safety: don't interfere if not shown
         guard let otherView = otherGestureRecognizer.view else { return false }
 
@@ -705,6 +775,7 @@ extension GuideController: UIGestureRecognizerDelegate {
         shouldBeRequiredToFailBy otherGestureRecognizer: UIGestureRecognizer
     ) -> Bool {
         guard gestureRecognizer === blockingGesture else { return false }
+        if isGuideBlockingGesture(otherGestureRecognizer) { return false }
         guard isShown() else { return false }  // Safety: don't block if not shown
         guard let otherView = otherGestureRecognizer.view else { return false }
         

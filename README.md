@@ -272,6 +272,10 @@ flowchart TB
 - Add the recognizer to `step.gestureRecognizerWhitelist`
 - Gestures attached to table/collection views also need to be whitelisted
 
+The whitelist is evaluated for each new touch sequence using the current step. A gesture can be blocked in step 1, allowed in step 2, and blocked again in step 3. Allowing one gesture does not release navigation swipe-back or other external gestures. Hiding or releasing the guide removes its blockers without changing the external recognizers' delegates or enabled states.
+
+The Multi-Step Guide demo includes a vertical-pan counter to verify this sequence. Check that the count changes only in step 2, swipe-back stays blocked throughout the guide, and swipe-back works again after completing or skipping it.
+
 ### Multi-window / multi-scene apps
 
 Pass `view`, `navigationController.view`, or your app window according to the area the guide should cover. You can create and retain the controller in `viewDidLoad` with a nil `focusView.window`. Wait for that window only when you need to obtain it from the focus view to cover the entire window.

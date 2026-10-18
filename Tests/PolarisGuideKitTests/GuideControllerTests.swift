@@ -274,6 +274,242 @@ final class GuideControllerTests: XCTestCase {
         XCTAssertFalse(guide.gestureRecognizer(blocker, shouldRecognizeSimultaneouslyWith: externalGesture))
     }
 
+    func testExplicitFailureGatesFollowEachStepsWhitelistIndependently() throws {
+        let window = makeWindow()
+        let host = window.rootViewController!.view!
+        let navigationGesture = FailureRequirementSpy()
+        let firstPan = FailureRequirementSpy()
+        let secondPan = FailureRequirementSpy()
+        [navigationGesture, firstPan, secondPan].forEach { window.addGestureRecognizer($0) }
+        let steps = (0..<4).map { _ in makeStep(in: host) }
+        steps[1].gestureRecognizerWhitelist = [firstPan]
+        steps[2].gestureRecognizerWhitelist = [secondPan]
+        let guide = guide(host: host, steps: steps)
+        XCTAssertTrue(guide.show())
+        let navigationGate = try XCTUnwrap(navigationGesture.gates.first)
+        let firstGate = try XCTUnwrap(firstPan.gates.first)
+        let secondGate = try XCTUnwrap(secondPan.gates.first)
+        XCTAssertFalse(firstGate === secondGate)
+        XCTAssertFalse(firstGate === navigationGate)
+        XCTAssertFalse(firstGate.canPrevent(secondPan))
+        XCTAssertFalse(firstGate.canBePrevented(by: secondPan))
+        XCTAssertFalse(firstGate.canPrevent(navigationGate))
+        XCTAssertFalse(firstGate.canBePrevented(by: navigationGate))
+
+        for index in steps.indices {
+            if index > 0 { XCTAssertTrue(guide.showNextStep()) }
+            XCTAssertEqual(firstGate.shouldBlock?(firstPan), index != 1)
+            XCTAssertEqual(secondGate.shouldBlock?(secondPan), index != 2)
+            XCTAssertEqual(navigationGate.shouldBlock?(navigationGesture), true)
+            for gesture in [navigationGesture, firstPan, secondPan] {
+                XCTAssertEqual(gesture.requirementCount, 1, "Step changes must reuse the explicit dependency")
+            }
+        }
+        XCTAssertTrue(navigationGate.view === host)
+        XCTAssertTrue(navigationGate.guardedGesture === navigationGesture)
+    }
+
+    func testExplicitFailureGateReadsWhitelistChangesWithinTheSameStep() throws {
+        let window = makeWindow()
+        let pan = FailureRequirementSpy()
+        let navigationGesture = FailureRequirementSpy()
+        window.addGestureRecognizer(pan)
+        window.addGestureRecognizer(navigationGesture)
+        let step = makeStep(in: window)
+        let guide = guide(host: window, steps: [step])
+        XCTAssertTrue(guide.show())
+        let gate = try XCTUnwrap(pan.gates.first)
+        let navigationGate = try XCTUnwrap(navigationGesture.gates.first)
+        XCTAssertEqual(gate.shouldBlock?(pan), true)
+        step.gestureRecognizerWhitelist = [pan]
+        XCTAssertEqual(gate.shouldBlock?(pan), false)
+        XCTAssertEqual(navigationGate.shouldBlock?(navigationGesture), true)
+        step.gestureRecognizerWhitelist = []
+        XCTAssertEqual(gate.shouldBlock?(pan), true)
+        guide.refreshOverlay()
+        XCTAssertEqual(pan.requirementCount, 1)
+        XCTAssertEqual(navigationGesture.requirementCount, 1)
+    }
+
+    func testWindowHostGuardsForwardedFocusNavigationAncestors() throws {
+        let window = makeWindow()
+        let page = UIViewController()
+        let navigation = UINavigationController(rootViewController: UIViewController())
+        navigation.setViewControllers([navigation.viewControllers[0], page], animated: false)
+        window.rootViewController = navigation
+        window.layoutIfNeeded()
+        let navigationGesture = FailureRequirementSpy()
+        navigation.view.addGestureRecognizer(navigationGesture)
+        let focusGesture = FailureRequirementSpy()
+        let step = makeStep(in: page.view)
+        step.forwardsTouchEventsToFocusView = true
+        step.focusView!.addGestureRecognizer(focusGesture)
+        let guide = guide(host: nil, steps: [step])
+        XCTAssertTrue(guide.show())
+        XCTAssertNotNil(container(in: window))
+        let navigationGate = try XCTUnwrap(navigationGesture.gates.first)
+        let focusGate = try XCTUnwrap(focusGesture.gates.first)
+        XCTAssertTrue(navigationGate.view === window)
+        XCTAssertEqual(navigationGate.shouldBlock?(navigationGesture), true)
+        XCTAssertEqual(focusGate.shouldBlock?(focusGesture), false)
+        let interactivePop = try XCTUnwrap(navigation.interactivePopGestureRecognizer)
+        let popGate = try XCTUnwrap(window.gestureRecognizers?.compactMap { $0 as? GuideGestureGate }.first {
+            $0.guardedGesture === interactivePop
+        })
+        XCTAssertEqual(popGate.shouldBlock?(interactivePop), true)
+    }
+
+    func testLayoutInstallsFailureGateWhenOffscreenHostAcquiresAnAncestor() throws {
+        let host = UIView(frame: CGRect(x: 0, y: 0, width: 320, height: 640))
+        let guide = guide(host: host, steps: [makeStep(in: host)])
+        XCTAssertTrue(guide.show())
+        let window = makeWindow()
+        let navigationGesture = FailureRequirementSpy()
+        window.rootViewController!.view.addGestureRecognizer(navigationGesture)
+        window.rootViewController!.view.addSubview(host)
+        let container = try XCTUnwrap(container(in: host))
+        container.setNeedsLayout()
+        container.layoutIfNeeded()
+        let gate = try XCTUnwrap(navigationGesture.gates.first)
+        XCTAssertEqual(gate.shouldBlock?(navigationGesture), true)
+        XCTAssertEqual(navigationGesture.requirementCount, 1)
+    }
+
+    func testRefreshingDynamicFocusEnablesOnlyRelevantAncestorGates() throws {
+        let window = makeWindow()
+        let left = UIView(frame: window.bounds)
+        let right = UIView(frame: window.bounds)
+        window.addSubview(left)
+        window.addSubview(right)
+        let leftGesture = FailureRequirementSpy()
+        let rightGesture = FailureRequirementSpy()
+        left.addGestureRecognizer(leftGesture)
+        right.addGestureRecognizer(rightGesture)
+        let leftFocus = makeStep(in: left).focusView!
+        let rightFocus = makeStep(in: right).focusView!
+        var selected = leftFocus
+        let step = GuideStep()
+        step.focusViewProvider = { selected }
+        step.forwardsTouchEventsToFocusView = true
+        let guide = guide(host: window, steps: [step])
+        XCTAssertTrue(guide.show())
+        let leftGate = try XCTUnwrap(leftGesture.gates.first)
+        XCTAssertTrue(leftGate.isEnabled)
+        XCTAssertTrue(rightGesture.gates.isEmpty)
+        selected = rightFocus
+        guide.refreshOverlay()
+        let rightGate = try XCTUnwrap(rightGesture.gates.first)
+        XCTAssertFalse(leftGate.isEnabled)
+        XCTAssertTrue(rightGate.isEnabled)
+        selected = leftFocus
+        guide.refreshOverlay()
+        XCTAssertTrue(leftGate.isEnabled)
+        XCTAssertFalse(rightGate.isEnabled)
+        XCTAssertEqual(leftGesture.requirementCount, 1)
+        XCTAssertEqual(rightGesture.requirementCount, 1)
+    }
+
+    func testHidingDisablesRemovesAndReleasesFailureGatesWithoutChangingExternalGestures() throws {
+        let host = UIView()
+        let gestureDelegate = GestureDelegate()
+        for originallyEnabled in [true, false] {
+            let gesture = FailureRequirementSpy()
+            gesture.delegate = gestureDelegate
+            gesture.isEnabled = originallyEnabled
+            host.addGestureRecognizer(gesture)
+            let guide = guide(host: host, steps: [makeStep(in: host)])
+            weak var releasedGate: GuideGestureGate?
+            try autoreleasepool {
+                XCTAssertTrue(guide.show())
+                let gate = try XCTUnwrap(gesture.gates.first)
+                releasedGate = gate
+                guide.hide()
+                XCTAssertFalse(gate.isEnabled)
+                XCTAssertNil(gate.view)
+                XCTAssertNil(gate.shouldBlock)
+                XCTAssertEqual(gesture.isEnabled, originallyEnabled)
+                XCTAssertTrue(gesture.delegate === gestureDelegate)
+                XCTAssertTrue(gesture.view === host)
+            }
+            XCTAssertNil(releasedGate, "The external recognizer must not retain a stale failure gate")
+            XCTAssertTrue(gesture.gates.isEmpty)
+            host.removeGestureRecognizer(gesture)
+        }
+    }
+
+    func testReleasingShownGuideReleasesFailureGatesWithoutChangingExternalGestures() throws {
+        let host = UIView()
+        let gesture = FailureRequirementSpy()
+        let gestureDelegate = GestureDelegate()
+        gesture.delegate = gestureDelegate
+        host.addGestureRecognizer(gesture)
+        weak var releasedGuide: GuideController?
+        weak var releasedGate: GuideGestureGate?
+        try autoreleasepool {
+            var shown: GuideController? = GuideController(hostView: host, steps: [makeStep(in: host)])
+            releasedGuide = shown
+            XCTAssertTrue(shown!.show())
+            let gate = try XCTUnwrap(gesture.gates.first)
+            releasedGate = gate
+            shown = nil
+            XCTAssertNil(releasedGuide)
+            XCTAssertFalse(gate.isEnabled)
+            XCTAssertNil(gate.view)
+            XCTAssertNil(gate.shouldBlock)
+        }
+        XCTAssertNil(releasedGate)
+        XCTAssertTrue(gesture.isEnabled)
+        XCTAssertTrue(gesture.delegate === gestureDelegate)
+        XCTAssertTrue(gesture.view === host)
+    }
+
+    func testRepeatedPresentationDoesNotAccumulateFailureGates() throws {
+        let host = UIView()
+        let gesture = FailureRequirementSpy()
+        host.addGestureRecognizer(gesture)
+        let guide = guide(host: host, steps: [makeStep(in: host)])
+        for presentation in 1...3 {
+            XCTAssertTrue(guide.show())
+            XCTAssertTrue(guide.show())
+            guide.refreshOverlay()
+            XCTAssertEqual(gesture.requirementCount, presentation)
+            XCTAssertEqual(gesture.gates.count, 1)
+            XCTAssertEqual(host.gestureRecognizers?.compactMap { $0 as? GuideGestureGate }.count, 1)
+            guide.hide()
+            XCTAssertTrue(gesture.gates.isEmpty)
+            XCTAssertTrue(host.gestureRecognizers?.compactMap { $0 as? GuideGestureGate }.isEmpty == true)
+        }
+    }
+
+    func testConcurrentGuidesDoNotCreateDependenciesOnEachOthersBlockingGestures() throws {
+        let host = UIView()
+        let gesture = FailureRequirementSpy()
+        host.addGestureRecognizer(gesture)
+        let first = guide(host: host, steps: [makeStep(in: host)])
+        let second = guide(host: host, steps: [makeStep(in: host)])
+        XCTAssertTrue(first.show())
+        XCTAssertTrue(second.show())
+        first.refreshOverlay()
+        second.refreshOverlay()
+        XCTAssertEqual(gesture.requirementCount, 2)
+        let gates = gesture.gates
+        XCTAssertEqual(gates.count, 2)
+        XCTAssertTrue(gates.allSatisfy { $0.guardedGesture === gesture })
+        XCTAssertEqual(host.gestureRecognizers?.compactMap { $0 as? GuideGestureGate }.count, 2)
+        let blockingGestures = blockers(in: host)
+        XCTAssertEqual(blockingGestures.count, 2)
+        let firstBlocker = try XCTUnwrap(blockingGestures.first { $0.delegate === first })
+        for other in blockingGestures.filter({ $0 !== firstBlocker }) + gates {
+            XCTAssertFalse(first.gestureRecognizer(firstBlocker, shouldRequireFailureOf: other))
+            XCTAssertFalse(first.gestureRecognizer(firstBlocker, shouldBeRequiredToFailBy: other))
+            XCTAssertTrue(first.gestureRecognizer(firstBlocker, shouldRecognizeSimultaneouslyWith: other))
+        }
+        first.hide()
+        XCTAssertEqual(gates.filter { $0.isEnabled }.count, 1)
+        XCTAssertEqual(gates.filter { $0.shouldBlock?(gesture) == true }.count, 1)
+        XCTAssertTrue(second.isShown())
+    }
+
     func testDeallocatedExplicitHostDoesNotFallBackToKeyWindow() {
         let window = makeWindow()
         var explicit: UIView? = UIView()
@@ -719,3 +955,21 @@ private final class CallbackHost: UIView {
         if subview is GuideContainerView { onGuideAdded?() }
     }
 }
+
+private final class WeakFailureRequirement {
+    weak var gesture: UIGestureRecognizer?
+    init(_ gesture: UIGestureRecognizer) { self.gesture = gesture }
+}
+
+private final class FailureRequirementSpy: UIGestureRecognizer {
+    private var requirements: [WeakFailureRequirement] = []
+    var requirementCount: Int { requirements.count }
+    var gates: [GuideGestureGate] { requirements.compactMap { $0.gesture as? GuideGestureGate } }
+
+    override func require(toFail otherGestureRecognizer: UIGestureRecognizer) {
+        requirements.append(WeakFailureRequirement(otherGestureRecognizer))
+        super.require(toFail: otherGestureRecognizer)
+    }
+}
+
+private final class GestureDelegate: NSObject, UIGestureRecognizerDelegate {}
